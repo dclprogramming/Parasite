@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.leanback.widget.NonOverlappingLinearLayout
+<com.liskovsoft.smartyoutubetv2.tv.ui.widgets.FocusGlowLinearLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="horizontal"
     android:gravity="center_vertical"
-    android:paddingStart="14dp"
-    android:paddingEnd="14dp"
+    android:paddingStart="10dp"
+    android:paddingEnd="8dp"
     android:paddingTop="9dp"
     android:paddingBottom="9dp"
     android:background="@drawable/bg_header_item">
@@ -21,15 +21,15 @@
         android:id="@+id/header_label"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="14dp"
+        android:layout_marginStart="10dp"
         android:textSize="16sp"
         android:textStyle="bold"
 
         android:singleLine="true"
-        android:maxWidth="150sp"
+        android:maxWidth="125sp"
         android:marqueeRepeatLimit="marquee_forever"
         android:ellipsize="marquee"
         android:scrollHorizontally="true"
 
         style="@style/TextAppearance.Leanback.Header"/>
-</androidx.leanback.widget.NonOverlappingLinearLayout>
+</com.liskovsoft.smartyoutubetv2.tv.ui.widgets.FocusGlowLinearLayout>

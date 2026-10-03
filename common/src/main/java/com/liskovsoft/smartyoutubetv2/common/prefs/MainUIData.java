@@ -373,53 +373,12 @@ public class MainUIData extends DataChangeBase implements ProfileChangeListener 
     }
 
     private void initColorSchemes() {
-        mColorSchemes.add(new ColorScheme(
-                R.string.color_scheme_teal,
-                null,
-                null,
-                null,
-                mContext));
+        // Parasite: only one colour scheme is offered (the former "Dark Grey", now a lavender palette).
         mColorSchemes.add(new ColorScheme(
                 R.string.color_scheme_dark_grey,
                 "App.Theme.DarkGrey.Player",
                 "App.Theme.DarkGrey.Browse",
                 "App.Theme.DarkGrey.Preferences",
-                mContext));
-        mColorSchemes.add(new ColorScheme(
-                R.string.color_scheme_red,
-                "App.Theme.Red.Player",
-                "App.Theme.Red.Browse",
-                "App.Theme.Red.Preferences",
-                mContext));
-        mColorSchemes.add(new ColorScheme(
-                R.string.color_scheme_dark_grey_oled,
-                "App.Theme.DarkGrey.OLED.Player",
-                "App.Theme.DarkGrey.OLED.Browse",
-                "App.Theme.DarkGrey.Preferences",
-                mContext));
-        mColorSchemes.add(new ColorScheme(
-                R.string.color_scheme_teal_oled,
-                "App.Theme.Leanback.OLED.Player",
-                "App.Theme.Leanback.OLED.Browse",
-                null,
-                mContext));
-        mColorSchemes.add(new ColorScheme(
-                R.string.color_scheme_dark_grey_monochrome,
-                "App.Theme.DarkGrey2.OLED.Player",
-                "App.Theme.DarkGrey2.OLED.Browse",
-                "App.Theme.DarkGrey.Preferences",
-                mContext));
-        mColorSchemes.add(new ColorScheme(
-                R.string.color_scheme_dark_blue,
-                "App.Theme.Leanback.Blue.Player",
-                "App.Theme.Leanback.Blue.Browse",
-                "App.Theme.Leanback.Blue.Preferences",
-                mContext));
-        mColorSchemes.add(new ColorScheme(
-                R.string.color_scheme_dark_blue_oled,
-                "App.Theme.Leanback.Blue.OLED.Player",
-                "App.Theme.Leanback.Blue.OLED.Browse",
-                "App.Theme.Leanback.Blue.Preferences",
                 mContext));
     }
 

@@ -61,20 +61,7 @@ public class AppDataSourceManager {
                 context.getString(R.string.subtitle_category_title), () -> SubtitleSettingsPresenter.instance(context).show(), R.drawable.settings_subtitles));
         settingItems.add(new SettingsItem(
                 context.getString(R.string.settings_search), () -> SearchSettingsPresenter.instance(context).show(), R.drawable.settings_search));
-        settingItems.add(new SettingsItem(
-                context.getString(R.string.content_block_provider), () -> SponsorBlockSettingsPresenter.instance(context).show(), R.drawable.settings_block));
-        settingItems.add(new SettingsItem(
-                context.getString(R.string.dearrow_provider), () -> DeArrowSettingsPresenter.instance(context).show(), R.drawable.settings_dearrow));
-        settingItems.add(new SettingsItem(
-                context.getString(R.string.app_backup_restore), () -> BackupSettingsPresenter.instance(context).show(), R.drawable.settings_backup));
-
-        if (Helpers.equalsAny(context.getPackageName(), Utils.KNOWN_PACKAGES)) {
-            settingItems.add(new SettingsItem(
-                    context.getString(R.string.settings_about), () -> AboutSettingsPresenter.instance(context).show(), R.drawable.settings_about));
-        } else {
-            settingItems.add(new SettingsItem(
-                    context.getString(R.string.settings_about), () -> AboutSimpleSettingsPresenter.instance(context).show(), R.drawable.settings_about));
-        }
+        // Parasite: SponsorBlock, DeArrow, Backup/Restore and About were removed from the settings list.
 
         return settingItems;
     }
