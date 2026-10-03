@@ -14,6 +14,7 @@ import com.liskovsoft.sharedutils.helpers.Helpers;
 import com.liskovsoft.smartyoutubetv2.common.app.models.data.SettingsItem;
 import com.liskovsoft.smartyoutubetv2.common.prefs.MainUIData;
 import com.liskovsoft.smartyoutubetv2.tv.R;
+import com.liskovsoft.smartyoutubetv2.tv.util.UiStyle;
 import com.liskovsoft.smartyoutubetv2.tv.util.ViewUtil;
 
 public class SettingsCardPresenter extends Presenter {
@@ -38,6 +39,7 @@ public class SettingsCardPresenter extends Presenter {
         @SuppressLint("InflateParams")
         View container = LayoutInflater.from(context).inflate(R.layout.settings_card, null);
         container.setBackgroundColor(mDefaultBackgroundColor);
+        UiStyle.roundCorners(container, 14);
         //if (VERSION.SDK_INT >= 23 && MainUIData.instance(context).isUiTweakEnabled(MainUIData.UI_TWEAK_ROUNDED_CORNERS)) {
         //    container.setForeground(ContextCompat.getDrawable(context, R.drawable.lb_card_outline));
         //}
@@ -52,8 +54,10 @@ public class SettingsCardPresenter extends Presenter {
             int backgroundColor = hasFocus ? mSelectedBackgroundColor : mDefaultBackgroundColor;
             int textColor = hasFocus ? mSelectedTextColor : mDefaultTextColor;
             
+            v.setBackgroundColor(backgroundColor);
             textView.setBackgroundColor(backgroundColor);
             textView.setTextColor(textColor);
+            UiStyle.zoomOnFocus(v, hasFocus);
 
             if (hasFocus) {
                 ViewUtil.enableMarquee(textView);

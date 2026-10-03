@@ -7,7 +7,12 @@
     <color name="default_background_gradient_start">#000000</color>
     <color name="default_background_gradient_end">#DDDDDD</color>
     <color name="fastlane_background">#6D5BFF</color>
-    <color name="fastlane_background_dark">#2B2670</color>
+    <!-- Parasite sidebar highlight colours (translucent accent / white) -->
+    <color name="header_focus_bg">#666D5BFF</color>
+    <color name="header_selected_bg">#26FFFFFF</color>
+    <!-- Overrides the leanback-preference default: darker, bluer settings panel -->
+    <color name="lb_preference_decor_list_background">#161727</color>
+    <color name="fastlane_background_dark">#1B1842</color>
     <color name="default_light_grey">#343434</color>
     <color name="search_opaque">#6D5BFF</color>
     <color name="search_opaque_yellow">#ffaa3f</color>

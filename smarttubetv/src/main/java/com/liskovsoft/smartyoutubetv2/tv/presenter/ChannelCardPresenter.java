@@ -24,6 +24,7 @@ import com.liskovsoft.smartyoutubetv2.common.prefs.MainUIData;
 import com.liskovsoft.smartyoutubetv2.tv.R;
 import com.liskovsoft.smartyoutubetv2.tv.presenter.base.LongClickPresenter;
 import com.liskovsoft.smartyoutubetv2.tv.ui.browse.video.GridFragmentHelper;
+import com.liskovsoft.smartyoutubetv2.tv.util.UiStyle;
 import com.liskovsoft.smartyoutubetv2.tv.util.ViewUtil;
 
 public class ChannelCardPresenter extends LongClickPresenter {
@@ -56,6 +57,8 @@ public class ChannelCardPresenter extends LongClickPresenter {
         @SuppressLint("InflateParams")
         View container = LayoutInflater.from(context).inflate(R.layout.channel_card, null);
         container.setBackgroundColor(mDefaultBackgroundColor);
+        UiStyle.roundCorners(container, 14);
+        UiStyle.circle(container.findViewById(R.id.channel_image));
         //if (VERSION.SDK_INT >= 23 && MainUIData.instance(context).isUiTweakEnabled(MainUIData.UI_TWEAK_ROUNDED_CORNERS)) {
         //    container.setForeground(ContextCompat.getDrawable(context, R.drawable.lb_card_outline));
         //}
@@ -74,8 +77,10 @@ public class ChannelCardPresenter extends LongClickPresenter {
                     textView.getTag(R.id.channel_new_content) != null ? mNewContentBackgroundColor : mDefaultBackgroundColor;
             int textColor = hasFocus ? mSelectedTextColor : mDefaultTextColor;
             
+            v.setBackgroundColor(backgroundColor);
             textView.setBackgroundColor(backgroundColor);
             textView.setTextColor(textColor);
+            UiStyle.zoomOnFocus(v, hasFocus);
 
             if (!autoScrollEnabled) {
                 return;
@@ -104,7 +109,9 @@ public class ChannelCardPresenter extends LongClickPresenter {
         textView.setText(video.getTitle());
 
         // We should setup props each time because object may be reused by the underlying RecyclerView
-        textView.setBackgroundColor(video.hasNewContent ? mNewContentBackgroundColor : mDefaultBackgroundColor);
+        int bindColor = video.hasNewContent ? mNewContentBackgroundColor : mDefaultBackgroundColor;
+        viewHolder.view.setBackgroundColor(bindColor);
+        textView.setBackgroundColor(bindColor);
         textView.setTag(R.id.channel_new_content, video.hasNewContent ? true : null);
 
 
