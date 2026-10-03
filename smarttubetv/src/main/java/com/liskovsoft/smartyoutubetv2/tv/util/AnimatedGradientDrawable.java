@@ -21,9 +21,9 @@ import android.view.animation.LinearInterpolator;
  * The gradient starts and ends with the same colour, so the loop has no visible seam.
  */
 public class AnimatedGradientDrawable extends Drawable implements Animatable {
-    private static final int COLOR_DEEP = 0xFF4B3BD0;
-    private static final int COLOR_LIGHT = 0xFF8C7DFF;
-    private static final long PERIOD_MS = 2400;
+    private static final int COLOR_DEEP = 0xFF5545D6;
+    private static final int COLOR_LIGHT = 0xFF7A6CF2;
+    private static final long PERIOD_MS = 7000;
 
     private final Paint mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF mRect = new RectF();

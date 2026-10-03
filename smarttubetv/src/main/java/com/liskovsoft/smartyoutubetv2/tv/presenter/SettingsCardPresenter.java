@@ -57,7 +57,7 @@ public class SettingsCardPresenter extends Presenter {
             if (hasFocus) {
                 // Animated lavender background; white text and icon stay readable on it
                 // (the old white focus background hid the white icons).
-                AnimatedGradientDrawable glow = AnimatedGradientDrawable.accent(v.getContext(), 0, 0, 0);
+                AnimatedGradientDrawable glow = AnimatedGradientDrawable.accent(v.getContext(), 14, 0, 0);
                 v.setBackground(glow);
                 glow.start();
                 textView.setBackgroundColor(Color.TRANSPARENT);
