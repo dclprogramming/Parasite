@@ -25,6 +25,9 @@ removes the things that made the incident possible, then adds checks that would 
 | Firebase Crashlytics + Google Services plugin + `google-services.json` | Telemetry to the author's Firebase project (beta/stable flavors). |
 | Hard-coded master password `smarttube` in `Utils.passwordMatch` | Bypassed the user's own PIN/lock. |
 | Donation/feedback/link entries in About | Pointed at third-party pages; unnecessary. |
+| Remote `constants.json` (`ConstantsService`) | Upstream downloaded OAuth client id/secret and an API key at runtime from the original author's GitHub release, so whoever controls that file controls the config. Now nothing is fetched; Google-Drive backup sign-in and YouTube Data API v3 features stay off (normal YouTube sign-in and playback don't use them). |
+| PO-token "cloud" servers (`service1.com`, `service2.com`) | Third-party hosts that received the visitor id when on-device PO-token generation was unavailable. List emptied. |
+| Unofficial `gradle-wrapper.jar` files | Gradle's wrapper validation rejected the app's wrapper jar (a pre-release Gradle 1.6 nightly from 2013) and the one under `exoplayer-amzn-2.10.6` (a 2.2.1 release candidate). Both look like old leftovers rather than tampering, but this can't be proven, so the root jar was replaced with the official Gradle 7.5 one (taken from Gradle's own v7.5.0 tag, sha256 `91a23940...b1e60`) and the unused ExoPlayer wrapper was deleted. |
 | `jcenter()` repository | Deprecated mirror; one more place a dependency could be swapped. Maven Central/Google/JitPack remain. |
 
 ## Added
@@ -35,6 +38,10 @@ removes the things that made the incident possible, then adds checks that would 
   permission, native library or network host.
 * `tools/make_keystore.sh`: creates your own signing key.
 * New application id `app.parasite.tv` (search provider authority updated), so nothing collides with upstream.
+
+## Still fetched at runtime (accepted)
+* SponsorBlock / DeArrow (`*.ajay.app`), Return YouTube Dislike, `api.qrserver.com` (QR codes), flag/placeholder image hosts: optional features, no code is executed from them.
+* The YouTube challenge solver script from `github.com/yt-dlp/ejs` release 0.0.1, only if the bundled/cached copy is missing; it runs inside the J2V8 JavaScript engine.
 
 ## Unverified / still to do
 * Nothing has been compiled. Expect build errors to fix from the Actions logs.
