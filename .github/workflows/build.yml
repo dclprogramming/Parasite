@@ -55,7 +55,15 @@ jobs:
             echo "::error::Missing signing secrets. Run tools/make_keystore.sh on your PC and add ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD and ANDROID_KEY_ALIAS (see README)."
             exit 1
           fi
-          echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          # Tolerate stray spaces/newlines from copy-paste, then prove the result is a usable keystore.
+          if ! printf '%s' "$KS_B64" | tr -d '[:space:]' | base64 -d > "$RUNNER_TEMP/release.jks" 2>/dev/null; then
+            echo "::error::ANDROID_KEYSTORE_BASE64 is not valid base64. Re-create it with: base64 -w0 parasite-release.jks  (paste only that one line of output)."
+            exit 1
+          fi
+          if ! keytool -list -keystore "$RUNNER_TEMP/release.jks" -storepass "$KS_PASS" -alias "$KEY_ALIAS" > /dev/null 2>&1; then
+            echo "::error::Keystore decoded, but the password or alias secret does not match it (alias must be: parasite)."
+            exit 1
+          fi
           {
             echo "storeFile=$RUNNER_TEMP/release.jks"
             echo "storePassword=$KS_PASS"
