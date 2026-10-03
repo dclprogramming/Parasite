@@ -91,6 +91,13 @@ jobs:
       - name: Verify APK (permissions, native libs, hosts, malware indicators)
         run: python3 tools/verify_apk.py "${{ steps.apk.outputs.path }}"
 
+      - name: Fixed-name copy of the universal APK (so download links never change)
+        run: |
+          D="$(dirname "${{ steps.apk.outputs.path }}")"
+          UNI="$(ls "$D"/*universal*.apk | head -n1)"
+          test -n "$UNI" || { echo "::error::No universal APK found"; exit 1; }
+          cp "$UNI" "$D/Parasite.apk"
+
       - name: Checksum
         run: |
           cd "$(dirname "${{ steps.apk.outputs.path }}")"
@@ -105,6 +112,22 @@ jobs:
             smarttubetv/build/outputs/apk/**/SHA256SUMS.txt
             smarttubetv/build/outputs/apk/**/*.report.txt
           if-no-files-found: error
+
+      - name: Update rolling test release (pushes to main)
+        # Permanent link for sideloading tests:
+        #   https://github.com/${{ github.repository }}/releases/download/test-latest/Parasite.apk
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          D="$(dirname "${{ steps.apk.outputs.path }}")"
+          R="${{ github.repository }}"
+          if ! gh release view test-latest --repo "$R" > /dev/null 2>&1; then
+            gh release create test-latest --repo "$R" --prerelease --target "${{ github.sha }}" \
+              --title "Parasite test build (latest main)" --notes "Rolling test build."
+          fi
+          gh release upload test-latest "$D/Parasite.apk" "$D/SHA256SUMS.txt" --repo "$R" --clobber
+          gh release edit test-latest --repo "$R" --notes "Built from commit ${{ github.sha }} (run ${{ github.run_number }})."
 
       - name: Publish release (tags only)
         if: startsWith(github.ref, 'refs/tags/v')
