@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Hardened build: no update sources. -->
+    <string-array name="update_urls">
+    </string-array>
+</resources>
