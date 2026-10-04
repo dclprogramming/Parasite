@@ -30,7 +30,7 @@ import com.liskovsoft.smartyoutubetv2.common.misc.BrowseProcessorManager;
 import com.liskovsoft.smartyoutubetv2.common.misc.MediaServiceManager;
 import com.liskovsoft.smartyoutubetv2.common.prefs.GeneralData;
 import com.liskovsoft.smartyoutubetv2.common.utils.Utils;
-import com.liskovsoft.youtubeapi.service.YouTubeServiceManager;
+import com.liskovsoft.smartyoutubetv2.common.providers.ProviderServices;
 import io.reactivex.Observable;
 import io.reactivex.disposables.Disposable;
 
@@ -62,8 +62,8 @@ public class SuggestionsController extends BasePlayerController {
     @Override
     public void onInit() {
         mBrowseProcessor = new BrowseProcessorManager(getContext(), PlaybackPresenter.instance(getContext())::syncItem);
-        mMediaItemService = YouTubeServiceManager.instance().getMediaItemService();
-        mContentService = YouTubeServiceManager.instance().getContentService();
+        mMediaItemService = ProviderServices.manager().getMediaItemService();
+        mContentService = ProviderServices.manager().getContentService();
     }
 
     @Override

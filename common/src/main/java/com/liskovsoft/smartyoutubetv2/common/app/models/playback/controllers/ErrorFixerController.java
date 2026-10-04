@@ -15,7 +15,7 @@ import com.liskovsoft.smartyoutubetv2.common.misc.BufferingDetector.OnLongBuffer
 import com.liskovsoft.smartyoutubetv2.common.prefs.PlayerData;
 import com.liskovsoft.smartyoutubetv2.common.prefs.PlayerTweaksData;
 import com.liskovsoft.smartyoutubetv2.common.utils.Utils;
-import com.liskovsoft.youtubeapi.service.YouTubeServiceManager;
+import com.liskovsoft.smartyoutubetv2.common.providers.ProviderServices;
 
 import java.util.List;
 
@@ -61,7 +61,7 @@ public class ErrorFixerController extends BasePlayerController implements OnLong
             } else {
                 // Also, some clients like ANDROID_REEL may just hang at start
                 MessageHelpers.showLongMessage(getContext(), "Fixing stalled client...");
-                YouTubeServiceManager.instance().switchNextClientNow();
+                ProviderServices.manager().switchNextClientNow();
                 mVideoLoaderController.reloadVideo();
             }
         } else {
@@ -183,10 +183,10 @@ public class ErrorFixerController extends BasePlayerController implements OnLong
             } else if (!mBufferingDetector.isPlayable()) { // Response code: 403
                 // The stream fails instantly if nParam isn't correct.
                 // Note, nParam generation strictly tied to the client but some reported that OkHttp could help.
-                YouTubeServiceManager.instance().switchNextClientNow();
+                ProviderServices.manager().switchNextClientNow();
                 showMessage = true;
             } else {
-                YouTubeServiceManager.instance().switchNextClient(); // Response code: 403
+                ProviderServices.manager().switchNextClient(); // Response code: 403
             }
         } else if (type == PlayerEventListener.ERROR_TYPE_RENDERER && rendererIndex == PlayerEventListener.RENDERER_INDEX_SUBTITLE) {
             // "Response code: 429" (subtitle error)
@@ -311,10 +311,10 @@ public class ErrorFixerController extends BasePlayerController implements OnLong
 
         if (Helpers.containsAny(message, "Unexpected token", "Syntax error", "invalid argument") || // temporal fix
                 Helpers.equalsAny(className, "PoTokenException", "BadWebViewException")) {
-            YouTubeServiceManager.instance().switchNextClient();
+            ProviderServices.manager().switchNextClient();
             mVideoLoaderController.reloadVideo();
         } else if (Helpers.containsAny(message, "is not defined")) {
-            YouTubeServiceManager.instance().invalidateCache();
+            ProviderServices.manager().invalidateCache();
             mVideoLoaderController.reloadVideo();
         } else {
             Log.e(TAG, "Probably no internet connection");

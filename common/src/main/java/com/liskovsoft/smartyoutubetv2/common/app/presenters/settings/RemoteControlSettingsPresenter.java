@@ -17,7 +17,7 @@ import com.liskovsoft.smartyoutubetv2.common.prefs.RemoteControlData;
 import com.liskovsoft.sharedutils.rx.RxHelper;
 import com.liskovsoft.smartyoutubetv2.common.utils.AppDialogUtil;
 import com.liskovsoft.smartyoutubetv2.common.utils.Utils;
-import com.liskovsoft.youtubeapi.service.YouTubeServiceManager;
+import com.liskovsoft.smartyoutubetv2.common.providers.ProviderServices;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,7 +30,7 @@ public class RemoteControlSettingsPresenter extends BasePresenter<Void> {
 
     public RemoteControlSettingsPresenter(Context context) {
         super(context);
-        ServiceManager service = YouTubeServiceManager.instance();
+        ServiceManager service = ProviderServices.manager();
         mRemoteManager = service.getRemoteControlService();
         mRemoteControlData = RemoteControlData.instance(context);
     }

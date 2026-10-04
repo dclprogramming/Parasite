@@ -22,7 +22,7 @@ import com.liskovsoft.smartyoutubetv2.common.exoplayer.selector.FormatItem;
 import com.liskovsoft.smartyoutubetv2.common.prefs.common.DataChangeBase.OnDataChange;
 import com.liskovsoft.smartyoutubetv2.common.prefs.RemoteControlData;
 import com.liskovsoft.smartyoutubetv2.common.utils.Utils;
-import com.liskovsoft.youtubeapi.service.YouTubeServiceManager;
+import com.liskovsoft.smartyoutubetv2.common.providers.ProviderServices;
 import io.reactivex.disposables.Disposable;
 import java.util.List;
 import java.util.Locale;
@@ -46,7 +46,7 @@ public class RemoteController extends BasePlayerController implements OnDataChan
 
     public RemoteController(Context context) {
         // Start receiving a commands as early as possible
-        ServiceManager service = YouTubeServiceManager.instance();
+        ServiceManager service = ProviderServices.manager();
         mRemoteControlService = service.getRemoteControlService();
         mRemoteControlData = RemoteControlData.instance(context);
         mRemoteControlData.setOnChange(this);

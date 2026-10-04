@@ -12,7 +12,7 @@ import com.liskovsoft.smartyoutubetv2.common.app.models.data.Video;
 import com.liskovsoft.smartyoutubetv2.common.app.models.data.VideoGroup;
 import com.liskovsoft.smartyoutubetv2.common.prefs.MainUIData;
 import com.liskovsoft.smartyoutubetv2.common.prefs.common.DataChangeBase.OnDataChange;
-import com.liskovsoft.youtubeapi.service.YouTubeServiceManager;
+import com.liskovsoft.smartyoutubetv2.common.providers.ProviderServices;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,7 +30,7 @@ public class UnlocalizedTitleProcessor implements OnDataChange, BrowseProcessor 
 
     public UnlocalizedTitleProcessor(Context context, OnItemReady onItemReady) {
         mOnItemReady = onItemReady;
-        ServiceManager service = YouTubeServiceManager.instance();
+        ServiceManager service = ProviderServices.manager();
         mItemService = service.getMediaItemService();
         mMainUIData = MainUIData.instance(context);
         mMainUIData.setOnChange(this);

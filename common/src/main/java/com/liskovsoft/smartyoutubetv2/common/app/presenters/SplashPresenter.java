@@ -30,7 +30,7 @@ import com.liskovsoft.smartyoutubetv2.common.proxy.ProxyManager;
 import com.liskovsoft.smartyoutubetv2.common.utils.IntentExtractor;
 import com.liskovsoft.smartyoutubetv2.common.utils.SimpleEditDialog;
 import com.liskovsoft.smartyoutubetv2.common.utils.Utils;
-import com.liskovsoft.youtubeapi.service.YouTubeServiceManager;
+import com.liskovsoft.smartyoutubetv2.common.providers.ProviderServices;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -115,7 +115,7 @@ public class SplashPresenter extends BasePresenter<SplashView> {
     }
 
     private void runBackgroundTasks() {
-        YouTubeServiceManager.instance().refreshCacheIfNeeded(); // warm up player engine
+        ProviderServices.manager().refreshCacheIfNeeded(); // warm up player engine
         enableHistoryIfNeeded();
         Utils.updateChannels(getContext());
         GDriveBackupWorker.schedule(getContext());

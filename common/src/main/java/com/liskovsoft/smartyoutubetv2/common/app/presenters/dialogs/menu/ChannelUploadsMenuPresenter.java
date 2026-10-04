@@ -15,7 +15,7 @@ import com.liskovsoft.smartyoutubetv2.common.app.presenters.ChannelPresenter;
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.ChannelUploadsPresenter;
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.dialogs.menu.VideoMenuPresenter.VideoMenuCallback;
 import com.liskovsoft.smartyoutubetv2.common.misc.MediaServiceManager;
-import com.liskovsoft.youtubeapi.service.YouTubeServiceManager;
+import com.liskovsoft.smartyoutubetv2.common.providers.ProviderServices;
 import io.reactivex.disposables.Disposable;
 
 import java.util.List;
@@ -30,7 +30,7 @@ public class ChannelUploadsMenuPresenter extends BaseMenuPresenter {
 
     private ChannelUploadsMenuPresenter(Context context) {
         super(context);
-        ServiceManager service = YouTubeServiceManager.instance();
+        ServiceManager service = ProviderServices.manager();
         mItemManager = service.getMediaItemService();
         mDialogPresenter = AppDialogPresenter.instance(context);
         mServiceManager = MediaServiceManager.instance();

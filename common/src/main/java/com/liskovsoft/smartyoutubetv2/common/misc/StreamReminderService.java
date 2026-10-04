@@ -16,7 +16,7 @@ import com.liskovsoft.smartyoutubetv2.common.app.presenters.PlaybackPresenter;
 import com.liskovsoft.smartyoutubetv2.common.app.views.ViewManager;
 import com.liskovsoft.smartyoutubetv2.common.misc.TickleManager.TickleListener;
 import com.liskovsoft.smartyoutubetv2.common.prefs.GeneralData;
-import com.liskovsoft.youtubeapi.service.YouTubeServiceManager;
+import com.liskovsoft.smartyoutubetv2.common.providers.ProviderServices;
 import io.reactivex.Observable;
 import io.reactivex.disposables.Disposable;
 
@@ -32,7 +32,7 @@ public class StreamReminderService implements TickleListener {
     private Disposable mReminderAction;
 
     private StreamReminderService(Context context) {
-        ServiceManager service = YouTubeServiceManager.instance();
+        ServiceManager service = ProviderServices.manager();
         mMediaItemService = service.getMediaItemService();
         mContext = context.getApplicationContext();
         mGeneralData = GeneralData.instance(context);

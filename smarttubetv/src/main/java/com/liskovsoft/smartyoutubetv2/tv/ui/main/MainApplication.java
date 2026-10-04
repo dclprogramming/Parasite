@@ -1,5 +1,7 @@
 package com.liskovsoft.smartyoutubetv2.tv.ui.main;
 
+import com.liskovsoft.smartyoutubetv2.common.prefs.ProviderData;
+
 import android.os.Build.VERSION;
 
 import androidx.multidex.MultiDexApplication;
@@ -55,6 +57,8 @@ public class MainApplication extends MultiDexApplication { // fix: Didn't find c
     @Override
     public void onCreate() {
         super.onCreate();
+
+        ProviderData.init(this); // the chosen provider must be known before any service is requested
 
         // ByeByeDPI fix
         // https://android-review.googlesource.com/c/platform/external/conscrypt/+/89408/

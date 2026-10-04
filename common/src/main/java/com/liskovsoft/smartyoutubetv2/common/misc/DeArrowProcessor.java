@@ -10,7 +10,7 @@ import com.liskovsoft.smartyoutubetv2.common.app.models.data.Video;
 import com.liskovsoft.smartyoutubetv2.common.app.models.data.VideoGroup;
 import com.liskovsoft.smartyoutubetv2.common.prefs.DeArrowData;
 import com.liskovsoft.smartyoutubetv2.common.prefs.common.DataChangeBase.OnDataChange;
-import com.liskovsoft.youtubeapi.service.YouTubeServiceManager;
+import com.liskovsoft.smartyoutubetv2.common.providers.ProviderServices;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -28,7 +28,7 @@ public class DeArrowProcessor implements OnDataChange, BrowseProcessor {
 
     public DeArrowProcessor(Context context, OnItemReady onItemReady) {
         mOnItemReady = onItemReady;
-        ServiceManager service = YouTubeServiceManager.instance();
+        ServiceManager service = ProviderServices.manager();
         mItemService = service.getMediaItemService();
         mDeArrowData = DeArrowData.instance(context);
         mDeArrowData.setOnChange(this);

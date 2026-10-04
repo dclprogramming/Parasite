@@ -6,10 +6,12 @@ import android.content.Context;
 import com.liskovsoft.mediaserviceinterfaces.data.MediaGroup;
 import com.liskovsoft.sharedutils.helpers.Helpers;
 import com.liskovsoft.smartyoutubetv2.common.R;
+import com.liskovsoft.smartyoutubetv2.common.app.models.data.BrowseSection;
 import com.liskovsoft.smartyoutubetv2.common.app.models.data.Video;
 import com.liskovsoft.smartyoutubetv2.common.prefs.AppPrefs;
 import com.liskovsoft.smartyoutubetv2.common.prefs.AppPrefs.ProfileChangeListener;
 import com.liskovsoft.smartyoutubetv2.common.prefs.GeneralData;
+import com.liskovsoft.smartyoutubetv2.common.prefs.ProviderData;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -93,6 +95,15 @@ public class SidebarService implements ProfileChangeListener {
             item.sectionId = sectionId;
 
             int index = getDefaultSectionIndex(sectionId);
+
+            if (sectionId == BrowseSection.ID_PROVIDERS) { // keep Providers right above Settings
+                int settingsIndex = Helpers.indexOfFirst(mPinnedItems,
+                        obj -> obj != null && obj.sectionId == MediaGroup.TYPE_SETTINGS);
+
+                if (settingsIndex != -1) {
+                    index = settingsIndex;
+                }
+            }
 
             if (index == -1 || index > mPinnedItems.size()) {
                 mPinnedItems.add(item);
@@ -253,6 +264,7 @@ public class SidebarService implements ProfileChangeListener {
         mDefaultSections.put(R.string.header_playlists, MediaGroup.TYPE_USER_PLAYLISTS);
         mDefaultSections.put(R.string.my_videos, MediaGroup.TYPE_MY_VIDEOS);
         mDefaultSections.put(R.string.playback_queue_category_title, MediaGroup.TYPE_PLAYBACK_QUEUE);
+        mDefaultSections.put(R.string.header_providers, BrowseSection.ID_PROVIDERS); // right above Settings
         mDefaultSections.put(R.string.header_settings, MediaGroup.TYPE_SETTINGS);
     }
 
@@ -304,6 +316,12 @@ public class SidebarService implements ProfileChangeListener {
 
         // Backward compatibility
         enableSection(MediaGroup.TYPE_SETTINGS, true);
+
+        // Add the Providers button once to sidebars saved by older versions (user can hide it later)
+        if (!ProviderData.isSidebarMigrated(mContext)) {
+            ProviderData.setSidebarMigrated(mContext);
+            enableSection(BrowseSection.ID_PROVIDERS, true);
+        }
 
         cleanupPinnedItems();
     }

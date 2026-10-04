@@ -13,7 +13,7 @@ import com.liskovsoft.smartyoutubetv2.common.app.models.playback.ui.ChatReceiver
 import com.liskovsoft.smartyoutubetv2.common.app.models.playback.ui.OptionItem;
 import com.liskovsoft.smartyoutubetv2.common.app.models.playback.ui.UiOptionItem;
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.AppDialogPresenter;
-import com.liskovsoft.youtubeapi.service.YouTubeServiceManager;
+import com.liskovsoft.smartyoutubetv2.common.providers.ProviderServices;
 import io.reactivex.disposables.Disposable;
 
 import java.util.ArrayList;
@@ -31,7 +31,7 @@ public class ChatController extends BasePlayerController {
 
     @Override
     public void onInit() {
-        mChatService = YouTubeServiceManager.instance().getLiveChatService();
+        mChatService = ProviderServices.manager().getLiveChatService();
     }
 
     @Override

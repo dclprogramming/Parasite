@@ -43,6 +43,7 @@ import com.liskovsoft.smartyoutubetv2.common.misc.MediaServiceManager.AccountCha
 import com.liskovsoft.smartyoutubetv2.common.prefs.AccountsData;
 import com.liskovsoft.smartyoutubetv2.common.prefs.BlockedChannelData;
 import com.liskovsoft.smartyoutubetv2.common.prefs.MainUIData;
+import com.liskovsoft.smartyoutubetv2.common.prefs.ProviderData;
 import com.liskovsoft.smartyoutubetv2.common.utils.Utils;
 
 import java.util.ArrayList;
@@ -207,6 +208,8 @@ public class BrowsePresenter extends BasePresenter<BrowseView> implements Sectio
         mSectionsMapping.put(MediaGroup.TYPE_NOTIFICATIONS, new BrowseSection(MediaGroup.TYPE_NOTIFICATIONS, getContext().getString(R.string.header_notifications), BrowseSection.TYPE_GRID, R.drawable.icon_notification, false));
         mSectionsMapping.put(MediaGroup.TYPE_PLAYBACK_QUEUE, new BrowseSection(MediaGroup.TYPE_PLAYBACK_QUEUE, getContext().getString(R.string.playback_queue_category_title), BrowseSection.TYPE_GRID, R.drawable.icon_queue, false));
 
+        mSectionsMapping.put(BrowseSection.ID_PROVIDERS, new BrowseSection(BrowseSection.ID_PROVIDERS, getContext().getString(R.string.header_providers), BrowseSection.TYPE_PROVIDERS, R.drawable.icon_providers));
+
         if (getSidebarService().isSettingsSectionEnabled()) {
             mSectionsMapping.put(MediaGroup.TYPE_SETTINGS, new BrowseSection(MediaGroup.TYPE_SETTINGS, getContext().getString(R.string.header_settings), BrowseSection.TYPE_SETTINGS_GRID, R.drawable.icon_settings));
         }
@@ -244,7 +247,7 @@ public class BrowsePresenter extends BasePresenter<BrowseView> implements Sectio
                 } else {
                     BrowseSection section = mSectionsMapping.get(item.sectionId);
 
-                    if (section != null) {
+                    if (section != null && ProviderData.supportsSection(item.sectionId)) {
                         mSections.add(section);
                     }
                 }
@@ -306,7 +309,7 @@ public class BrowsePresenter extends BasePresenter<BrowseView> implements Sectio
         int bootSectionId = getSidebarService().getBootSectionId();
 
         // Empty Home on first run fix. Switch to something non-empty.
-        if (!getSignInService().isSigned() && VideoStateService.instance(getContext()).isEmpty()) {
+        if (ProviderData.getSelected() == ProviderData.YOUTUBE && !getSignInService().isSigned() && VideoStateService.instance(getContext()).isEmpty()) {
             bootSectionId = MediaGroup.TYPE_MUSIC;
         }
 
@@ -668,6 +671,7 @@ public class BrowsePresenter extends BasePresenter<BrowseView> implements Sectio
                 Observable<MediaGroup> group2 = mGridMapping.get(section.getId());
                 updateVideoGrid(section, group2, 0, section.isAuthOnly());
                 break;
+            case BrowseSection.TYPE_PROVIDERS:
             case BrowseSection.TYPE_ERROR:
                 getView().showProgressBar(false);
                 break;
@@ -881,7 +885,7 @@ public class BrowsePresenter extends BasePresenter<BrowseView> implements Sectio
     }
 
     private void authCheck(boolean check, Runnable callback) {
-        if (!check) {
+        if (!check || ProviderData.getSelected() != ProviderData.YOUTUBE) { // other providers have no login here
             callback.run();
             return;
         }
@@ -1192,7 +1196,7 @@ public class BrowsePresenter extends BasePresenter<BrowseView> implements Sectio
             ErrorFragmentData errorFragmentData;
             if (error != null && !Helpers.containsAny(error.getMessage(), "fromNullable result is null")) {
                 errorFragmentData = new CategoryEmptyError(getContext(), error);
-            } else if (getSignInService().isSigned()) {
+            } else if (getSignInService().isSigned() || ProviderData.getSelected() != ProviderData.YOUTUBE) {
                 errorFragmentData = new CategoryEmptyError(getContext(), null);
             } else {
                 errorFragmentData = new SignInError(getContext());

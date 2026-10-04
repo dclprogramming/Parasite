@@ -29,7 +29,7 @@ import com.liskovsoft.smartyoutubetv2.common.prefs.AppPrefs;
 import com.liskovsoft.smartyoutubetv2.common.prefs.MainUIData;
 import com.liskovsoft.smartyoutubetv2.common.utils.LoadingManager;
 import com.liskovsoft.smartyoutubetv2.common.utils.Utils;
-import com.liskovsoft.youtubeapi.service.YouTubeServiceManager;
+import com.liskovsoft.smartyoutubetv2.common.providers.ProviderServices;
 
 import io.reactivex.Observable;
 import io.reactivex.disposables.Disposable;
@@ -99,7 +99,7 @@ public class MediaServiceManager implements OnAccountChange {
     }
 
     private MediaServiceManager() {
-        ServiceManager service = YouTubeServiceManager.instance();
+        ServiceManager service = ProviderServices.manager();
         mItemService = service.getMediaItemService();
         mContentService = service.getContentService();
         mSignInService = service.getSignInService();

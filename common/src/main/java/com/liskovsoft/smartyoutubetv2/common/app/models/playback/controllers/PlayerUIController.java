@@ -40,8 +40,7 @@ import com.liskovsoft.smartyoutubetv2.common.prefs.PlayerData;
 import com.liskovsoft.smartyoutubetv2.common.prefs.SearchData;
 import com.liskovsoft.smartyoutubetv2.common.utils.AppDialogUtil;
 import com.liskovsoft.smartyoutubetv2.common.utils.Utils;
-import com.liskovsoft.youtubeapi.service.YouTubeServiceManager;
-import com.liskovsoft.youtubeapi.service.YouTubeSignInService;
+import com.liskovsoft.smartyoutubetv2.common.providers.ProviderServices;
 import io.reactivex.Observable;
 import io.reactivex.disposables.Disposable;
 
@@ -88,7 +87,7 @@ public class PlayerUIController extends BasePlayerController {
     public PlayerUIController() {
         mHandler = new Handler(Looper.getMainLooper());
 
-        ServiceManager service = YouTubeServiceManager.instance();
+        ServiceManager service = ProviderServices.manager();
         mMediaItemService = service.getMediaItemService();
     }
 
@@ -433,7 +432,7 @@ public class PlayerUIController extends BasePlayerController {
             return;
         }
 
-        if (!YouTubeSignInService.instance().isSigned()) {
+        if (!ProviderServices.manager().getSignInService().isSigned()) {
             getPlayer().setButtonState(R.id.action_thumbs_down, PlayerUI.BUTTON_OFF);
             MessageHelpers.showMessage(getContext(), R.string.msg_signed_users_only);
             return;
@@ -460,7 +459,7 @@ public class PlayerUIController extends BasePlayerController {
             return;
         }
 
-        if (!YouTubeSignInService.instance().isSigned()) {
+        if (!ProviderServices.manager().getSignInService().isSigned()) {
             getPlayer().setButtonState(R.id.action_thumbs_up, PlayerUI.BUTTON_OFF);
             MessageHelpers.showMessage(getContext(), R.string.msg_signed_users_only);
             return;
@@ -839,7 +838,7 @@ public class PlayerUIController extends BasePlayerController {
         String videoId = getVideo().videoId;
         mPlaylistInfos = null;
         Disposable playlistsInfoAction =
-                YouTubeServiceManager.instance().getMediaItemService().getPlaylistsInfoObserve(videoId)
+                ProviderServices.manager().getMediaItemService().getPlaylistsInfoObserve(videoId)
                         .subscribe(
                                 videoPlaylistInfos -> {
                                     mPlaylistInfos = videoPlaylistInfos;

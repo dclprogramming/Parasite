@@ -33,7 +33,7 @@ import com.liskovsoft.smartyoutubetv2.common.prefs.BlockedChannelData;
 import com.liskovsoft.smartyoutubetv2.common.prefs.GeneralData;
 import com.liskovsoft.smartyoutubetv2.common.prefs.MainUIData;
 import com.liskovsoft.smartyoutubetv2.common.utils.AppDialogUtil;
-import com.liskovsoft.youtubeapi.service.YouTubeServiceManager;
+import com.liskovsoft.smartyoutubetv2.common.providers.ProviderServices;
 import io.reactivex.Observable;
 import io.reactivex.disposables.Disposable;
 
@@ -116,7 +116,7 @@ public class VideoMenuPresenter extends BaseMenuPresenter {
 
     private VideoMenuPresenter(Context context) {
         super(context);
-        ServiceManager service = YouTubeServiceManager.instance();
+        ServiceManager service = ProviderServices.manager();
         mMediaItemService = service.getMediaItemService();
         mServiceManager = MediaServiceManager.instance();
         mDialogPresenter = AppDialogPresenter.instance(context);

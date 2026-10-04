@@ -20,7 +20,7 @@ import com.liskovsoft.smartyoutubetv2.common.prefs.AccountsData;
 import com.liskovsoft.smartyoutubetv2.common.prefs.GeneralData;
 import com.liskovsoft.smartyoutubetv2.common.utils.GlideIconFetcher;
 import com.liskovsoft.smartyoutubetv2.common.utils.Utils;
-import com.liskovsoft.youtubeapi.service.YouTubeServiceManager;
+import com.liskovsoft.smartyoutubetv2.common.providers.ProviderServices;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -33,7 +33,7 @@ public class AccountSelectionPresenter extends BasePresenter<Void> {
 
     public AccountSelectionPresenter(Context context) {
         super(context);
-        ServiceManager service = YouTubeServiceManager.instance();
+        ServiceManager service = ProviderServices.manager();
         mSignInService = service.getSignInService();
     }
 

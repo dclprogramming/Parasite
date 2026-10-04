@@ -9,7 +9,7 @@ import com.liskovsoft.mediaserviceinterfaces.data.ItemGroup;
 import com.liskovsoft.mediaserviceinterfaces.data.ItemGroup.Item;
 import com.liskovsoft.smartyoutubetv2.common.prefs.AppPrefs;
 import com.liskovsoft.smartyoutubetv2.common.prefs.AppPrefs.ProfileChangeListener;
-import com.liskovsoft.youtubeapi.service.YouTubeServiceManager;
+import com.liskovsoft.smartyoutubetv2.common.providers.ProviderServices;
 
 import java.io.File;
 import java.util.List;
@@ -99,7 +99,7 @@ public class ChannelGroupServiceWrapper implements ProfileChangeListener {
 
     private ChannelGroupService getService() {
         if (mService == null) {
-            mService = YouTubeServiceManager.instance().getChannelGroupService();
+            mService = ProviderServices.manager().getChannelGroupService();
         }
 
         return mService;

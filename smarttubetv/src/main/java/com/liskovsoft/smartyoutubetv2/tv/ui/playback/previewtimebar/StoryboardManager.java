@@ -18,7 +18,7 @@ import com.liskovsoft.sharedutils.mylogger.Log;
 import com.liskovsoft.sharedutils.rx.RxHelper;
 import com.liskovsoft.smartyoutubetv2.common.app.models.data.Video;
 import com.liskovsoft.smartyoutubetv2.tv.util.ViewUtil;
-import com.liskovsoft.youtubeapi.service.YouTubeServiceManager;
+import com.liskovsoft.smartyoutubetv2.common.providers.ProviderServices;
 import io.reactivex.Observable;
 import io.reactivex.disposables.Disposable;
 
@@ -46,7 +46,7 @@ public class StoryboardManager {
 
     public StoryboardManager(Context context) {
         mContext = context;
-        ServiceManager service = YouTubeServiceManager.instance();
+        ServiceManager service = ProviderServices.manager();
         mMediaItemService = service.getMediaItemService();
     }
 

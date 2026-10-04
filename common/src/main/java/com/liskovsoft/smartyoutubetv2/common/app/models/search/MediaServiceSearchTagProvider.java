@@ -7,7 +7,7 @@ import com.liskovsoft.mediaserviceinterfaces.ServiceManager;
 import com.liskovsoft.sharedutils.mylogger.Log;
 import com.liskovsoft.smartyoutubetv2.common.app.models.search.vineyard.Tag;
 import com.liskovsoft.sharedutils.rx.RxHelper;
-import com.liskovsoft.youtubeapi.service.YouTubeServiceManager;
+import com.liskovsoft.smartyoutubetv2.common.providers.ProviderServices;
 import io.reactivex.disposables.Disposable;
 
 public class MediaServiceSearchTagProvider implements SearchTagsProvider {
@@ -18,7 +18,7 @@ public class MediaServiceSearchTagProvider implements SearchTagsProvider {
 
     public MediaServiceSearchTagProvider(boolean ignoreEmptyQuery) {
         mIgnoreEmptyQuery = ignoreEmptyQuery;
-        ServiceManager service = YouTubeServiceManager.instance();
+        ServiceManager service = ProviderServices.manager();
         mContentService = service.getContentService();
     }
 

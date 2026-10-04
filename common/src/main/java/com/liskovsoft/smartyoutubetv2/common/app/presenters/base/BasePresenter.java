@@ -36,7 +36,7 @@ import com.liskovsoft.smartyoutubetv2.common.prefs.MainUIData;
 import com.liskovsoft.smartyoutubetv2.common.prefs.PlayerTweaksData;
 import com.liskovsoft.smartyoutubetv2.common.prefs.SearchData;
 import com.liskovsoft.smartyoutubetv2.common.utils.Utils;
-import com.liskovsoft.youtubeapi.service.YouTubeServiceManager;
+import com.liskovsoft.smartyoutubetv2.common.providers.ProviderServices;
 
 import java.lang.ref.WeakReference;
 import java.util.Collections;
@@ -279,23 +279,23 @@ public abstract class BasePresenter<T> implements Presenter<T> {
     }
 
     protected CommentsService getCommentsService() {
-        return YouTubeServiceManager.instance().getCommentsService();
+        return ProviderServices.manager().getCommentsService();
     }
 
     protected ContentService getContentService() {
-        return YouTubeServiceManager.instance().getContentService();
+        return ProviderServices.manager().getContentService();
     }
 
     protected SignInService getSignInService() {
-        return YouTubeServiceManager.instance().getSignInService();
+        return ProviderServices.manager().getSignInService();
     }
 
     protected NotificationsService getNotificationsService() {
-        return YouTubeServiceManager.instance().getNotificationsService();
+        return ProviderServices.manager().getNotificationsService();
     }
 
     protected MediaItemService getMediaItemService() {
-        return YouTubeServiceManager.instance().getMediaItemService();
+        return ProviderServices.manager().getMediaItemService();
     }
 
     protected MediaServiceManager getServiceManager() {

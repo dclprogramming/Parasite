@@ -21,7 +21,7 @@ import com.liskovsoft.smartyoutubetv2.common.app.presenters.settings.SponsorBloc
 import com.liskovsoft.smartyoutubetv2.common.prefs.SponsorBlockData;
 import com.liskovsoft.sharedutils.rx.RxHelper;
 import com.liskovsoft.smartyoutubetv2.common.utils.Utils;
-import com.liskovsoft.youtubeapi.service.YouTubeServiceManager;
+import com.liskovsoft.smartyoutubetv2.common.providers.ProviderServices;
 import io.reactivex.Observable;
 import io.reactivex.disposables.Disposable;
 
@@ -80,7 +80,7 @@ public class SponsorBlockController extends BasePlayerController {
 
     @Override
     public void onInit() {
-        ServiceManager service = YouTubeServiceManager.instance();
+        ServiceManager service = ProviderServices.manager();
         mMediaItemService = service.getMediaItemService();
     }
 
