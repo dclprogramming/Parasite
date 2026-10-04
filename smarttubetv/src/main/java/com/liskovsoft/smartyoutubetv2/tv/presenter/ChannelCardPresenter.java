@@ -36,6 +36,7 @@ public class ChannelCardPresenter extends LongClickPresenter {
     private int mSelectedTextColor;
     private int mWidth;
     private int mHeight;
+    private int mRowHeight;
 
     @Override
     public ViewHolder onCreateViewHolder(ViewGroup parent) {
@@ -57,7 +58,7 @@ public class ChannelCardPresenter extends LongClickPresenter {
         @SuppressLint("InflateParams")
         View container = LayoutInflater.from(context).inflate(R.layout.channel_card, null);
         container.setBackgroundColor(mDefaultBackgroundColor);
-        UiStyle.roundCorners(container, 14);
+        UiStyle.roundCorners(container, 16);
         UiStyle.circle(container.findViewById(R.id.channel_image));
         //if (VERSION.SDK_INT >= 23 && MainUIData.instance(context).isUiTweakEnabled(MainUIData.UI_TWEAK_ROUNDED_CORNERS)) {
         //    container.setForeground(ContextCompat.getDrawable(context, R.drawable.lb_card_outline));
@@ -103,7 +104,7 @@ public class ChannelCardPresenter extends LongClickPresenter {
         Context context = viewHolder.view.getContext();
         Video video = (Video) item;
 
-        ViewUtil.setDimensions(viewHolder.view.findViewById(R.id.channel_card_wrapper), mWidth, -1); // don't do auto height
+        ViewUtil.setDimensions(viewHolder.view.findViewById(R.id.channel_card_wrapper), mWidth, mRowHeight);
 
         TextView textView = viewHolder.view.findViewById(R.id.channel_title);
         textView.setText(video.getTitle());
@@ -138,6 +139,8 @@ public class ChannelCardPresenter extends LongClickPresenter {
 
         mWidth = dimens.first;
         mHeight = dimens.second;
+        mRowHeight = (int) (context.getResources().getDimensionPixelSize(R.dimen.channel_row_height) *
+                MainUIData.instance(context).getVideoGridScale());
     }
 
     protected Pair<Integer, Integer> getCardDimensPx(Context context) {
