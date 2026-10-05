@@ -164,7 +164,7 @@ public class RumbleMediaItemService extends StubMediaItemService {
             ProviderMediaGroup more = new ProviderMediaGroup(MediaGroup.TYPE_SUGGESTIONS, "More from " + current.authorName);
 
             for (RumbleParser.Entry entry : RumbleApi.listing(RumbleApi.channelPath(current.channelId), 1)) {
-                if (!videoId.equals(entry.id)) {
+                if (!videoId.equals(entry.stem)) {
                     more.add(entry.toMediaItem());
                 }
             }
@@ -178,7 +178,7 @@ public class RumbleMediaItemService extends StubMediaItemService {
         ProviderMediaGroup top = new ProviderMediaGroup(MediaGroup.TYPE_SUGGESTIONS, "Top today");
 
         for (RumbleParser.Entry entry : RumbleApi.listing(RumbleApi.browsePath("views", "today"), 1)) {
-            if (!videoId.equals(entry.id)) {
+            if (!videoId.equals(entry.stem)) {
                 top.add(entry.toMediaItem());
             }
         }

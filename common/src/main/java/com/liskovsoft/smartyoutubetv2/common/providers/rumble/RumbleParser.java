@@ -37,6 +37,7 @@ public final class RumbleParser {
     private static final Pattern DATETIME = Pattern.compile("datetime=\"([^\"]+)\"");
     private static final Pattern OG_IMAGE = Pattern.compile("<meta[^>]+property=\"og:image\"[^>]+content=\"([^\"]+)\"");
     private static final Pattern OG_TITLE = Pattern.compile("<meta[^>]+property=\"og:title\"[^>]+content=\"([^\"]+)\"");
+    private static final Pattern EMBED_ID = Pattern.compile("rumble\\.com(?:\\\\?/|%2F)embed(?:\\\\?/|%2F)(?:[0-9a-z]+\\.)?([0-9a-z]+)", Pattern.CASE_INSENSITIVE);
     private static final Pattern PAGE_TITLE = Pattern.compile("<title>(.*?)</title>", Pattern.DOTALL);
 
     private RumbleParser() {
@@ -44,7 +45,8 @@ public final class RumbleParser {
 
     /** One video found in a listing. */
     public static class Entry {
-        public String id;
+        public String id;   // short id from the page address, e.g. "v7cwvbs"
+        public String stem; // whole page name without ".html", e.g. "v7cwvbs-some-title". Used as the app's video id
         public String title;
         public String thumb;
         public String channelId; // "c/Name" or "user/Name"
@@ -53,7 +55,7 @@ public final class RumbleParser {
         public long publishedMs;
 
         public ProviderMediaItem toMediaItem() {
-            ProviderMediaItem item = ProviderMediaItem.video(id);
+            ProviderMediaItem item = ProviderMediaItem.video(stem != null ? stem : id);
             item.title = title;
             item.author = channelName;
             item.channelId = channelId;
@@ -130,6 +132,7 @@ public final class RumbleParser {
 
                 Entry entry = new Entry();
                 entry.id = id;
+                entry.stem = stemOf(id, anchor.group(2));
                 entry.title = firstNonEmpty(textOf(anchor.group(3)), titleFromSlug(anchor.group(2)));
                 entry.thumb = firstImage(anchor.group(3));
                 result.add(entry);
@@ -174,6 +177,7 @@ public final class RumbleParser {
     private static Entry parseChunk(String chunk, String id, String slug) {
         Entry entry = new Entry();
         entry.id = id;
+        entry.stem = stemOf(id, slug);
 
         Matcher h3 = TITLE_H3.matcher(chunk);
         String title = h3.find() ? textOf(h3.group(1)) : null;
@@ -556,6 +560,23 @@ public final class RumbleParser {
         }
 
         return first;
+    }
+
+    private static String stemOf(String id, String slug) {
+        return slug == null || slug.isEmpty() ? id : id + "-" + slug;
+    }
+
+    /**
+     * The id Rumble's player knows is not the one in the watch page address. It is written in the watch page itself,
+     * e.g. as "https://rumble.com/embed/vb0ofn/" (also seen JSON-escaped or URL-encoded).
+     */
+    public static String findEmbedId(String watchPageHtml) {
+        if (watchPageHtml == null) {
+            return null;
+        }
+
+        Matcher matcher = EMBED_ID.matcher(watchPageHtml);
+        return matcher.find() ? matcher.group(1).toLowerCase(Locale.US) : null;
     }
 
     private static String titleFromSlug(String slug) {

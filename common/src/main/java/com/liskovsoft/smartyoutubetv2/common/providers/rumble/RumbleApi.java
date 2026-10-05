@@ -72,10 +72,17 @@ public final class RumbleApi {
      */
     public static RumbleParser.Stream stream(String videoId) throws IOException {
         StringBuilder problems = new StringBuilder();
+        String embedId;
+
+        try {
+            embedId = embedIdOf(videoId);
+        } catch (IOException e) {
+            throw new IOException("watch page: " + e.getMessage());
+        }
 
         for (String version : new String[]{"u4", "u3"}) {
             try {
-                String json = RumbleHttp.get("/embedJS/" + version + "/?request=video&ver=2&v=" + encode(videoId), SITE + "/embed/" + videoId + "/", true);
+                String json = RumbleHttp.get("/embedJS/" + version + "/?request=video&ver=2&v=" + encode(embedId), SITE + "/embed/" + embedId + "/", true);
                 RumbleParser.Stream stream = RumbleParser.parseEmbed(json);
 
                 if (stream != null && (stream.mp4Url != null || stream.hlsUrl != null)) {
@@ -90,7 +97,7 @@ public final class RumbleApi {
 
         // The API refused us: let the embed page's own player fetch the stream, and read it from there
         try {
-            RumbleParser.Stream stream = RumbleParser.parseScrape(BrowserFetcher.scrape(SITE + "/embed/" + videoId + "/", PLAYER_SCRIPT, 25));
+            RumbleParser.Stream stream = RumbleParser.parseScrape(BrowserFetcher.scrape(SITE + "/embed/" + embedId + "/", PLAYER_SCRIPT, 25));
 
             if (stream != null) {
                 return stream;
@@ -121,6 +128,28 @@ public final class RumbleApi {
     public static boolean looksSignedIn() throws IOException {
         String html = RumbleHttp.getWithSession("/").toLowerCase(java.util.Locale.US);
         return html.contains("/logout") || html.contains("sign out") || html.contains("log out");
+    }
+
+    private static final java.util.Map<String, String> EMBED_IDS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * Rumble's player id of a video. {@code videoId} is the page name from the watch address ("v7cwvbs-some-title").
+     */
+    static String embedIdOf(String videoId) throws IOException {
+        String cached = EMBED_IDS.get(videoId);
+
+        if (cached != null) {
+            return cached;
+        }
+
+        String embedId = RumbleParser.findEmbedId(RumbleHttp.get("/" + videoId + ".html", SITE + "/", false));
+
+        if (embedId == null) {
+            throw new IOException("player id not found in the page");
+        }
+
+        EMBED_IDS.put(videoId, embedId);
+        return embedId;
     }
 
     /** First characters of an answer, for error messages. */
