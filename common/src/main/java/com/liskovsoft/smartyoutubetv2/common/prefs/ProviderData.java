@@ -54,9 +54,9 @@ public final class ProviderData {
         }
     }
 
-    /** Flip these to true as provider modules get implemented (Rumble is not done yet). */
+    /** Providers that have a working service layer. */
     public static boolean isAvailable(int provider) {
-        return provider == YOUTUBE || provider == ODYSEE;
+        return provider == YOUTUBE || provider == ODYSEE || provider == RUMBLE;
     }
 
     /**

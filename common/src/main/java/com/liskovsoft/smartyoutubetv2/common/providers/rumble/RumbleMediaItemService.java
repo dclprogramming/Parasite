@@ -1,4 +1,4 @@
-package com.liskovsoft.smartyoutubetv2.common.providers.odysee;
+package com.liskovsoft.smartyoutubetv2.common.providers.rumble;
 
 import com.liskovsoft.mediaserviceinterfaces.data.MediaGroup;
 import com.liskovsoft.mediaserviceinterfaces.data.MediaItem;
@@ -19,12 +19,12 @@ import java.io.IOException;
 import java.util.List;
 
 /**
- * Odysee playback info, video details and (local) channel follow/unfollow.
+ * Rumble playback info, video details and (local) channel follow/unfollow.
  */
-public class OdyseeMediaItemService extends StubMediaItemService {
+public class RumbleMediaItemService extends StubMediaItemService {
     private final ProviderStore mStore;
 
-    public OdyseeMediaItemService(ProviderStore store) {
+    public RumbleMediaItemService(ProviderStore store) {
         mStore = store;
     }
 
@@ -65,26 +65,21 @@ public class OdyseeMediaItemService extends StubMediaItemService {
     }
 
     private MediaItemFormatInfo loadFormatInfo(String videoId) throws IOException {
-        OdyseeClaim claim = videoId != null ? OdyseeApi.claimById(videoId) : null;
-
-        if (claim == null) {
-            return ProviderFormatInfo.unplayable(videoId, "Video not found on Odysee");
+        if (videoId == null) {
+            return ProviderFormatInfo.unplayable(null, "Video not found on Rumble");
         }
 
-        if (claim.isPaid) {
-            return ProviderFormatInfo.unplayable(videoId, "Paid videos are not supported");
+        RumbleParser.Stream stream = RumbleApi.stream(videoId);
+
+        if (stream.mp4Url == null) {
+            String reason = stream.live || stream.hlsUrl != null ? "Live streams are not supported yet" : "This video can't be played here";
+            return ProviderFormatInfo.unplayable(videoId, reason);
         }
 
-        if (!claim.isPlayable()) {
-            return ProviderFormatInfo.unplayable(videoId, "This video can't be played here");
-        }
+        mStore.addToHistory(stream.toMediaItem(videoId));
 
-        String url = OdyseeApi.resolveStreamUrl(claim);
-
-        mStore.addToHistory(claim.toMediaItem());
-
-        return ProviderFormatInfo.playable(videoId, url)
-                .describe(claim.getTitle(), claim.getAuthor(), claim.channelId, claim.description, claim.durationSec);
+        return ProviderFormatInfo.playable(videoId, stream.mp4Url)
+                .describe(stream.title, stream.authorName, stream.channelId, null, stream.durationSec);
     }
 
     // Video details
@@ -124,27 +119,24 @@ public class OdyseeMediaItemService extends StubMediaItemService {
     }
 
     private MediaItemMetadata loadMetadata(String videoId) throws IOException {
-        OdyseeClaim claim = videoId != null ? OdyseeApi.claimById(videoId) : null;
-
-        if (claim == null) {
+        if (videoId == null) {
             return null;
         }
 
-        ProviderMediaItem item = claim.toMediaItem();
+        RumbleParser.Stream stream = RumbleApi.stream(videoId);
+        ProviderMediaItem item = stream.toMediaItem(videoId);
         ProviderMetadata metadata = new ProviderMetadata();
-        metadata.title = claim.getTitle();
+        metadata.title = stream.title;
         metadata.secondTitle = item.secondTitle;
-        metadata.description = claim.description;
-        metadata.author = claim.getAuthor();
-        metadata.authorImageUrl = claim.channelThumbnailUrl;
-        metadata.publishedDate = claim.releaseTimeSec > 0 ? ProviderMediaItem.timeAgo(claim.releaseTimeSec * 1000) : null;
+        metadata.author = stream.authorName;
+        metadata.publishedDate = stream.publishedMs > 0 ? ProviderMediaItem.timeAgo(stream.publishedMs) : null;
         metadata.videoId = videoId;
-        metadata.channelId = claim.channelId;
-        metadata.subscribed = mStore.isFollowed(claim.channelId);
-        metadata.durationMs = claim.durationSec * 1000;
+        metadata.channelId = stream.channelId;
+        metadata.subscribed = mStore.isFollowed(stream.channelId);
+        metadata.durationMs = stream.durationSec * 1000;
 
         try { // suggestions are optional: the video must play even if they fail
-            addSuggestions(metadata, claim);
+            addSuggestions(metadata, stream, videoId);
         } catch (IOException e) {
             // NOP
         }
@@ -152,13 +144,13 @@ public class OdyseeMediaItemService extends StubMediaItemService {
         return metadata;
     }
 
-    private void addSuggestions(ProviderMetadata metadata, OdyseeClaim current) throws IOException {
+    private void addSuggestions(ProviderMetadata metadata, RumbleParser.Stream current, String videoId) throws IOException {
         if (current.channelId != null) {
-            ProviderMediaGroup more = new ProviderMediaGroup(MediaGroup.TYPE_SUGGESTIONS, "More from " + current.getAuthor());
+            ProviderMediaGroup more = new ProviderMediaGroup(MediaGroup.TYPE_SUGGESTIONS, "More from " + current.authorName);
 
-            for (OdyseeClaim claim : OdyseeApi.claimSearch(OdyseeApi.videos().channels(current.channelId).orderBy("release_time"), 1)) {
-                if (claim.isPlayable() && !claim.claimId.equals(current.claimId)) {
-                    more.add(claim.toMediaItem());
+            for (RumbleParser.Entry entry : RumbleApi.listing(RumbleApi.channelPath(current.channelId), 1)) {
+                if (!videoId.equals(entry.id)) {
+                    more.add(entry.toMediaItem());
                 }
             }
 
@@ -168,19 +160,19 @@ public class OdyseeMediaItemService extends StubMediaItemService {
             }
         }
 
-        ProviderMediaGroup trending = new ProviderMediaGroup(MediaGroup.TYPE_SUGGESTIONS, "Trending");
+        ProviderMediaGroup top = new ProviderMediaGroup(MediaGroup.TYPE_SUGGESTIONS, "Top today");
 
-        for (OdyseeClaim claim : OdyseeApi.claimSearch(OdyseeApi.videos().orderBy("trending_group", "trending_mixed").perChannel(1), 1)) {
-            if (claim.isPlayable() && !claim.claimId.equals(current.claimId)) {
-                trending.add(claim.toMediaItem());
+        for (RumbleParser.Entry entry : RumbleApi.listing(RumbleApi.browsePath("views", "today"), 1)) {
+            if (!videoId.equals(entry.id)) {
+                top.add(entry.toMediaItem());
             }
         }
 
-        if (!trending.isEmpty()) {
-            metadata.suggestions.add(trending);
+        if (!top.isEmpty()) {
+            metadata.suggestions.add(top);
 
             if (metadata.nextVideo == null) {
-                metadata.nextVideo = trending.getMediaItems().get(0);
+                metadata.nextVideo = top.getMediaItems().get(0);
             }
         }
     }
@@ -233,18 +225,13 @@ public class OdyseeMediaItemService extends StubMediaItemService {
         }
 
         try {
-            List<String> ids = java.util.Collections.singletonList(channelId);
-            List<OdyseeClaim> channels = OdyseeApi.claimsByIds(ids, true); // proper name and icon
-
-            if (!channels.isEmpty()) {
-                mStore.follow(channels.get(0).toMediaItem());
-                return;
-            }
+            mStore.follow(RumbleApi.channelInfo(channelId)); // proper name and icon
+            return;
         } catch (Exception e) {
             // Fall back to what the item already knows
         }
 
-        String name = hint != null && hint.getAuthor() != null ? hint.getAuthor() : channelId;
+        String name = hint != null && hint.getAuthor() != null ? hint.getAuthor() : channelId.substring(channelId.indexOf('/') + 1);
         mStore.follow(ProviderMediaItem.channel(channelId, name, null));
     }
 }

@@ -3,31 +3,25 @@ package com.liskovsoft.smartyoutubetv2.common.providers.odysee;
 import com.liskovsoft.mediaserviceinterfaces.data.MediaGroup;
 import com.liskovsoft.mediaserviceinterfaces.data.MediaItem;
 import com.liskovsoft.sharedutils.rx.RxHelper;
+import com.liskovsoft.smartyoutubetv2.common.providers.LocalContentBase;
 import com.liskovsoft.smartyoutubetv2.common.providers.ProviderStore;
 import com.liskovsoft.smartyoutubetv2.common.providers.model.ProviderMediaGroup;
 import com.liskovsoft.smartyoutubetv2.common.providers.model.ProviderMediaItem;
 import com.liskovsoft.smartyoutubetv2.common.providers.odysee.OdyseeApi.Query;
-import com.liskovsoft.smartyoutubetv2.common.providers.stub.StubContentService;
 
 import io.reactivex.Observable;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 
 /**
  * Odysee implementation of the app's content sections (home, search, channels, subscriptions, history...).<br/>
  * There is no login: subscriptions and history are stored locally.
  */
-public class OdyseeContentService extends StubContentService {
+public class OdyseeContentService extends LocalContentBase {
     private static final int MAX_FEED_CHANNELS = 100;
-    private final ProviderStore mStore;
 
     private static class Row {
         final String title;
@@ -40,7 +34,7 @@ public class OdyseeContentService extends StubContentService {
     }
 
     public OdyseeContentService(ProviderStore store) {
-        mStore = store;
+        super(store);
     }
 
     // Rows (home and categories)
@@ -105,43 +99,14 @@ public class OdyseeContentService extends StubContentService {
         return rows;
     }
 
-    /**
-     * Loads all rows in parallel. A row that fails is skipped; fails only if every row failed.
-     */
     private List<MediaGroup> fetchRows(int type, List<Row> rows) throws Exception {
-        ExecutorService pool = Executors.newFixedThreadPool(4);
-        List<MediaGroup> result = new ArrayList<>();
-        Exception lastError = null;
+        List<Callable<ProviderMediaGroup>> tasks = new ArrayList<>();
 
-        try {
-            List<Callable<ProviderMediaGroup>> tasks = new ArrayList<>();
-
-            for (Row row : rows) {
-                tasks.add(() -> videoPage(type, row.title, row.query, 1));
-            }
-
-            List<Future<ProviderMediaGroup>> futures = pool.invokeAll(tasks);
-
-            for (Future<ProviderMediaGroup> future : futures) {
-                try {
-                    ProviderMediaGroup group = future.get();
-
-                    if (group != null && !group.isEmpty()) {
-                        result.add(group);
-                    }
-                } catch (ExecutionException e) {
-                    lastError = e.getCause() instanceof Exception ? (Exception) e.getCause() : e;
-                }
-            }
-        } finally {
-            pool.shutdown();
+        for (Row row : rows) {
+            tasks.add(() -> videoPage(type, row.title, row.query, 1));
         }
 
-        if (result.isEmpty() && lastError != null) {
-            throw lastError;
-        }
-
-        return result;
+        return runParallel(tasks);
     }
 
     /**
@@ -178,60 +143,6 @@ public class OdyseeContentService extends StubContentService {
             Query query = OdyseeApi.videos().channels(ids.toArray(new String[0])).orderBy("release_time").size(36);
             return videoPage(MediaGroup.TYPE_SUBSCRIPTIONS, "Subscriptions", query, 1);
         });
-    }
-
-    @Override
-    public Observable<MediaGroup> getSubscribedChannelsObserve() {
-        return RxHelper.fromCallable(() -> channelsGroup(false));
-    }
-
-    @Override
-    public Observable<MediaGroup> getSubscribedChannelsByNewContentObserve() {
-        return RxHelper.fromCallable(() -> channelsGroup(false));
-    }
-
-    @Override
-    public Observable<MediaGroup> getSubscribedChannelsByNameObserve() {
-        return RxHelper.fromCallable(() -> channelsGroup(true));
-    }
-
-    @Override
-    public Observable<MediaGroup> getSubscribedChannelsByLastViewedObserve() {
-        return RxHelper.fromCallable(() -> channelsGroup(false));
-    }
-
-    private MediaGroup channelsGroup(boolean sortByName) {
-        List<ProviderMediaItem> channels = mStore.getChannels();
-
-        if (sortByName) {
-            Collections.sort(channels, (a, b) -> safe(a.title).compareToIgnoreCase(safe(b.title)));
-        }
-
-        ProviderMediaGroup group = new ProviderMediaGroup(MediaGroup.TYPE_CHANNEL_UPLOADS, "Channels");
-
-        for (ProviderMediaItem channel : channels) {
-            group.add(channel);
-        }
-
-        return group;
-    }
-
-    @Override
-    public Observable<MediaGroup> getHistoryObserve() {
-        return RxHelper.fromCallable(() -> {
-            ProviderMediaGroup group = new ProviderMediaGroup(MediaGroup.TYPE_HISTORY, "History");
-
-            for (ProviderMediaItem video : mStore.getHistory()) {
-                group.add(video);
-            }
-
-            return group;
-        });
-    }
-
-    @Override
-    public void clearHistory() {
-        mStore.clearHistory();
     }
 
     private List<String> followedChannelIds() {
@@ -292,19 +203,6 @@ public class OdyseeContentService extends StubContentService {
         return group;
     }
 
-    @Override
-    public Observable<MediaGroup> continueGroupObserve(MediaGroup mediaGroup) {
-        return RxHelper.fromCallable(() -> {
-            if (mediaGroup instanceof ProviderMediaGroup && ((ProviderMediaGroup) mediaGroup).getNext() != null) {
-                ProviderMediaGroup next = ((ProviderMediaGroup) mediaGroup).getNext().load();
-                next.setChannelId(mediaGroup.getChannelId());
-                return next;
-            }
-
-            return new ProviderMediaGroup(mediaGroup != null ? mediaGroup.getType() : MediaGroup.TYPE_UNDEFINED, null);
-        });
-    }
-
     // Search
 
     @Override
@@ -359,33 +257,5 @@ public class OdyseeContentService extends StubContentService {
         }
 
         return group;
-    }
-
-    // Helpers
-
-    static String channelIdOf(MediaItem item) {
-        if (item == null) {
-            return null;
-        }
-
-        String key = item.getReloadPageKey();
-
-        if (key != null && key.startsWith(ProviderMediaItem.CHANNEL_KEY_PREFIX)) {
-            return key.substring(ProviderMediaItem.CHANNEL_KEY_PREFIX.length());
-        }
-
-        return item.getChannelId();
-    }
-
-    static String channelIdOf(String reloadPageKey) {
-        if (reloadPageKey != null && reloadPageKey.startsWith(ProviderMediaItem.CHANNEL_KEY_PREFIX)) {
-            return reloadPageKey.substring(ProviderMediaItem.CHANNEL_KEY_PREFIX.length());
-        }
-
-        return null;
-    }
-
-    private static String safe(String value) {
-        return value != null ? value : "";
     }
 }
