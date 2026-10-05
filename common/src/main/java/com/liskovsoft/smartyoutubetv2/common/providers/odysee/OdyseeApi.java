@@ -216,14 +216,20 @@ public final class OdyseeApi {
         String first = null;
 
         for (String host : STREAM_HOSTS) {
-            String url = host + "/api/v3/streams/free/" + encode(claim.name) + "/" + claim.claimId + "/" + sdHash6 + ".mp4";
+            String[] candidates = {
+                    host + "/v6/streams/" + claim.claimId + "/" + sdHash6 + ".mp4", // current web player
+                    host + "/api/v4/streams/free/" + encode(claim.name) + "/" + claim.claimId + "/" + sdHash6,
+                    host + "/api/v3/streams/free/" + encode(claim.name) + "/" + claim.claimId + "/" + sdHash6 + ".mp4"
+            };
 
-            if (first == null) {
-                first = url;
-            }
+            for (String url : candidates) {
+                if (first == null) {
+                    first = url;
+                }
 
-            if (ProviderHttp.isReachable(url)) {
-                return url;
+                if (ProviderHttp.isReachable(url)) {
+                    return url;
+                }
             }
         }
 

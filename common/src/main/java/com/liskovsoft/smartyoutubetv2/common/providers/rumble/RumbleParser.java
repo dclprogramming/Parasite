@@ -116,6 +116,8 @@ public final class RumbleParser {
             }
         }
 
+        addMissingByWindows(html, seen, result); // pages whose items don't use the usual class names
+
         if (result.isEmpty()) { // markup changed: fall back to plain links
             Matcher anchor = ANCHOR_VIDEO.matcher(html);
 
@@ -135,6 +137,38 @@ public final class RumbleParser {
         }
 
         return result;
+    }
+
+    /**
+     * Every video link starts a window that ends at the next video's link. Used for videos
+     * the class-based split did not find.
+     */
+    private static void addMissingByWindows(String html, Set<String> seen, List<Entry> result) {
+        List<String> ids = new ArrayList<>();
+        List<String> slugs = new ArrayList<>();
+        List<Integer> starts = new ArrayList<>();
+        Matcher link = VIDEO_HREF.matcher(html);
+
+        while (link.find()) {
+            if (!ids.contains(link.group(1))) {
+                ids.add(link.group(1));
+                slugs.add(link.group(2));
+                starts.add(link.start());
+            }
+        }
+
+        for (int i = 0; i < ids.size(); i++) {
+            if (seen.contains(ids.get(i))) {
+                continue;
+            }
+
+            int end = i + 1 < ids.size() ? starts.get(i + 1) : Math.min(html.length(), starts.get(i) + 4000);
+            Entry entry = parseChunk(html.substring(starts.get(i), end), ids.get(i), slugs.get(i));
+            entry.durationSec = 0; // the duration badge sits before the link: it would belong to the previous video
+
+            seen.add(entry.id);
+            result.add(entry);
+        }
     }
 
     private static Entry parseChunk(String chunk, String id, String slug) {

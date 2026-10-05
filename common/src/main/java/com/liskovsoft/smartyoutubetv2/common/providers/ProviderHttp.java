@@ -20,7 +20,14 @@ public final class ProviderHttp {
     }
 
     public static String get(String url) throws IOException {
-        return execute(OkHttpManager.instance().doGetRequest(url, headers(null)), url);
+        return get(url, null);
+    }
+
+    /**
+     * @param extraHeaders replaces the default headers of the same name. May be null.
+     */
+    public static String get(String url, Map<String, String> extraHeaders) throws IOException {
+        return execute(OkHttpManager.instance().doGetRequest(url, headers(extraHeaders)), url);
     }
 
     public static String postJson(String url, String json) throws IOException {
@@ -58,7 +65,7 @@ public final class ProviderHttp {
             ResponseBody body = response.body();
 
             if (!response.isSuccessful() || body == null) {
-                throw new IOException("HTTP " + response.code() + " from " + url);
+                throw new HttpStatusException(response.code(), url);
             }
 
             return body.string();

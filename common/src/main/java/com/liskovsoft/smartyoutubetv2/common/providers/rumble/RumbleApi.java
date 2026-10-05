@@ -1,6 +1,5 @@
 package com.liskovsoft.smartyoutubetv2.common.providers.rumble;
 
-import com.liskovsoft.smartyoutubetv2.common.providers.ProviderHttp;
 import com.liskovsoft.smartyoutubetv2.common.providers.model.ProviderMediaItem;
 
 import java.io.IOException;
@@ -23,13 +22,11 @@ public final class RumbleApi {
      * Videos listed on a Rumble page (browse, category, channel or search). Page numbers start from 1.
      */
     public static List<RumbleParser.Entry> listing(String path, int page) throws IOException {
-        String url = SITE + path;
-
         if (page > 1) {
-            url += (path.contains("?") ? "&" : "?") + "page=" + page;
+            path += (path.contains("?") ? "&" : "?") + "page=" + page;
         }
 
-        return RumbleParser.parseListing(ProviderHttp.get(url));
+        return RumbleParser.parseListing(RumbleHttp.get(path, SITE + "/", false));
     }
 
     public static String browsePath(String sort, String date) {
@@ -49,21 +46,21 @@ public final class RumbleApi {
     }
 
     public static List<ProviderMediaItem> searchChannels(String text) throws IOException {
-        return RumbleParser.parseChannels(ProviderHttp.get(SITE + "/search/channel?q=" + encode(text)));
+        return RumbleParser.parseChannels(RumbleHttp.get("/search/channel?q=" + encode(text), SITE + "/", false));
     }
 
     /**
      * Name and picture of a channel, read from its page.
      */
     public static ProviderMediaItem channelInfo(String channelId) throws IOException {
-        return RumbleParser.parseChannelPage(channelId, ProviderHttp.get(SITE + channelPath(channelId)));
+        return RumbleParser.parseChannelPage(channelId, RumbleHttp.get(channelPath(channelId), SITE + "/", false));
     }
 
     /**
      * Metadata and stream urls of a video. {@code videoId} is the short embed id, e.g. "v7cwvbs".
      */
     public static RumbleParser.Stream stream(String videoId) throws IOException {
-        String json = ProviderHttp.get(SITE + "/embedJS/u3/?request=video&ver=2&v=" + encode(videoId));
+        String json = RumbleHttp.get("/embedJS/u3/?request=video&ver=2&v=" + encode(videoId), SITE + "/embed/" + videoId + "/", true);
         RumbleParser.Stream stream = RumbleParser.parseEmbed(json);
 
         if (stream == null) {

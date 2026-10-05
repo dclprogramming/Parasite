@@ -1,5 +1,9 @@
 package com.liskovsoft.smartyoutubetv2.common.app.presenters;
 
+import com.liskovsoft.smartyoutubetv2.common.prefs.ProviderData;
+import com.liskovsoft.sharedutils.helpers.MessageHelpers;
+import com.liskovsoft.smartyoutubetv2.common.R;
+
 import android.annotation.SuppressLint;
 import android.content.Context;
 import com.liskovsoft.mediaserviceinterfaces.ServiceManager;
@@ -69,6 +73,12 @@ public class AddDevicePresenter extends BasePresenter<AddDeviceView> {
     }
 
     public void start() {
+        if (ProviderData.getSelected() != ProviderData.YOUTUBE) {
+            MessageHelpers.showLongMessage(getContext(), getContext().getString(R.string.provider_no_login_msg,
+                    getContext().getString(ProviderData.getSelected() == ProviderData.RUMBLE ? R.string.provider_rumble : R.string.provider_odysee)));
+            return;
+        }
+
         RxHelper.disposeActions(mDeviceCodeAction);
         getViewManager().startView(AddDeviceView.class);
     }
