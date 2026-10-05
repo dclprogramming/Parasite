@@ -1,5 +1,6 @@
 package com.liskovsoft.smartyoutubetv2.common.providers.rumble;
 
+import com.liskovsoft.smartyoutubetv2.common.providers.BrowserFetcher;
 import com.liskovsoft.smartyoutubetv2.common.providers.model.ProviderMediaItem;
 
 import java.io.IOException;
@@ -12,6 +13,13 @@ import java.util.List;
  */
 public final class RumbleApi {
     private static final String SITE = "https://rumble.com";
+    /** Runs inside the embed page: lists the media urls the page's player has loaded. Returns "" until there is one. */
+    private static final String PLAYER_SCRIPT = "(function(){var o={src:'',urls:[],title:document.title||'',image:''};"
+            + "var v=document.querySelector('video');if(v){o.src=v.currentSrc||v.src||'';}"
+            + "try{performance.getEntriesByType('resource').forEach(function(r){if(/\\.(mp4|m3u8|webm)(\\?|$)/i.test(r.name)){o.urls.push(r.name);}});}catch(e){}"
+            + "if(o.src&&o.src.indexOf('blob:')!==0){o.urls.push(o.src);}"
+            + "var m=document.querySelector('meta[property=\"og:image\"]');if(m){o.image=m.content;}"
+            + "return o.urls.length?JSON.stringify(o):'';})()";
     /** A page with fewer videos than this is the last one. */
     public static final int MIN_FULL_PAGE = 8;
 
@@ -60,24 +68,37 @@ public final class RumbleApi {
      * Metadata and stream urls of a video. {@code videoId} is the short embed id, e.g. "v7cwvbs".
      */
     public static RumbleParser.Stream stream(String videoId) throws IOException {
-        IOException last = null;
+        StringBuilder problems = new StringBuilder();
 
         for (String version : new String[]{"u4", "u3"}) {
             try {
                 String json = RumbleHttp.get("/embedJS/" + version + "/?request=video&ver=2&v=" + encode(videoId), SITE + "/embed/" + videoId + "/", true);
                 RumbleParser.Stream stream = RumbleParser.parseEmbed(json);
 
-                if (stream != null) {
+                if (stream != null && (stream.mp4Url != null || stream.hlsUrl != null)) {
                     return stream;
                 }
 
-                last = new IOException("Unexpected Rumble response (" + version + ")");
+                problems.append(version).append(": ").append(stream == null ? "not JSON" : "no stream in answer").append("; ");
             } catch (IOException e) {
-                last = e;
+                problems.append(version).append(": ").append(e.getMessage()).append("; ");
             }
         }
 
-        throw last != null ? last : new IOException("Rumble did not answer");
+        // The API refused us: let the embed page's own player fetch the stream, and read it from there
+        try {
+            RumbleParser.Stream stream = RumbleParser.parseScrape(BrowserFetcher.scrape(SITE + "/embed/" + videoId + "/", PLAYER_SCRIPT, 25));
+
+            if (stream != null) {
+                return stream;
+            }
+
+            problems.append("player: no stream found");
+        } catch (IOException e) {
+            problems.append("player: ").append(e.getMessage());
+        }
+
+        throw new IOException(problems.toString());
     }
 
     /**

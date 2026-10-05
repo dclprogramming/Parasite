@@ -75,14 +75,15 @@ public class RumbleMediaItemService extends StubMediaItemService {
 
         RumbleParser.Stream stream = RumbleApi.stream(videoId);
 
-        if (stream.mp4Url == null) {
-            String reason = stream.live || stream.hlsUrl != null ? "Live streams are not supported yet" : "This video can't be played here";
-            return ProviderFormatInfo.unplayable(videoId, reason);
+        String url = stream.mp4Url != null ? stream.mp4Url : stream.hlsUrl; // the player reads the type from the file extension
+
+        if (url == null) {
+            return ProviderFormatInfo.unplayable(videoId, "This video can't be played here");
         }
 
         mStore.addToHistory(stream.toMediaItem(videoId));
 
-        return ProviderFormatInfo.playable(videoId, stream.mp4Url)
+        return ProviderFormatInfo.playable(videoId, url)
                 .describe(stream.title, stream.authorName, stream.channelId, null, stream.durationSec);
     }
 
@@ -127,7 +128,17 @@ public class RumbleMediaItemService extends StubMediaItemService {
             return null;
         }
 
-        RumbleParser.Stream stream = RumbleApi.stream(videoId);
+        RumbleParser.Stream stream;
+
+        try {
+            stream = RumbleApi.stream(videoId);
+        } catch (IOException e) { // details are optional: the video itself loads separately
+            ProviderMetadata minimal = new ProviderMetadata();
+            minimal.title = "Rumble video";
+            minimal.videoId = videoId;
+            return minimal;
+        }
+
         ProviderMediaItem item = stream.toMediaItem(videoId);
         ProviderMetadata metadata = new ProviderMetadata();
         metadata.title = stream.title;

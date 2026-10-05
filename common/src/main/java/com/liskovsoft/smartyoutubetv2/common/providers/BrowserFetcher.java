@@ -87,7 +87,91 @@ public final class BrowserFetcher {
         }
     }
 
+    /**
+     * Loads {@code pageUrl} in the hidden browser and runs {@code script} once a second until it returns a non-empty
+     * string (or {@code maxWaitSec} passes). The script must return a string; "" means "not ready yet".
+     */
+    public static String scrape(String pageUrl, String script, int maxWaitSec) throws IOException {
+        Context context = ProviderData.getAppContext();
+
+        if (context == null) {
+            throw new IOException("Browser is not ready yet");
+        }
+
+        synchronized (LOCK) {
+            Request request = new Request();
+            MAIN.post(() -> beginScrape(context, pageUrl, script, maxWaitSec, request));
+
+            try {
+                if (!request.done.await(maxWaitSec + 15L, TimeUnit.SECONDS)) {
+                    throw new IOException("Browser scrape timed out");
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IOException(e);
+            }
+
+            if (request.error != null) {
+                throw new IOException(request.error);
+            }
+
+            return request.body;
+        }
+    }
+
     // Main thread
+
+    private static void beginScrape(Context context, String pageUrl, String script, int maxWaitSec, Request request) {
+        try {
+            sCurrent = request;
+            WebView view = webView(context);
+            sPageLoaded = false;
+            view.loadUrl(pageUrl);
+            pollScrape(view, script, request, 0, maxWaitSec);
+        } catch (Throwable e) {
+            Log.e(TAG, "WebView failed", e);
+            request.finish(0, null, "Browser is not available: " + e);
+        }
+    }
+
+    private static void pollScrape(WebView view, String script, Request request, int attempt, int maxAttempts) {
+        MAIN.postDelayed(() -> {
+            try {
+                view.evaluateJavascript(script, value -> {
+                    String result = decodeJsString(value);
+
+                    if (result != null && !result.isEmpty()) {
+                        request.finish(200, result, null);
+                    } else if (attempt + 1 >= maxAttempts) {
+                        request.finish(0, null, "The page's player did not start (title: " + pageTitleHint(view) + ")");
+                    } else {
+                        pollScrape(view, script, request, attempt + 1, maxAttempts);
+                    }
+                });
+            } catch (Throwable e) {
+                request.finish(0, null, "Browser scrape failed: " + e);
+            }
+        }, 1000);
+    }
+
+    private static String pageTitleHint(WebView view) {
+        String title = view.getTitle();
+        return title != null ? title : "none";
+    }
+
+    /** evaluateJavascript hands back a JSON-encoded value: "\"text\"" or null. */
+    private static String decodeJsString(String value) {
+        if (value == null || value.equals("null")) {
+            return null;
+        }
+
+        try {
+            Object parsed = new org.json.JSONTokener(value).nextValue();
+            return parsed instanceof String ? (String) parsed : null;
+        } catch (org.json.JSONException e) {
+            return null;
+        }
+    }
 
     private static void begin(Context context, String origin, String url, Request request) {
         try {

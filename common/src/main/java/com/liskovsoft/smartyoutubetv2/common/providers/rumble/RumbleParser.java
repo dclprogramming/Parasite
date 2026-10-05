@@ -333,6 +333,35 @@ public final class RumbleParser {
     }
 
     /**
+     * Result of reading the embed page's own player: {"src": "...", "urls": [...], "title": "...", "image": "..."}.
+     */
+    public static Stream parseScrape(String json) {
+        try {
+            JSONObject root = new JSONObject(json);
+            Stream stream = new Stream();
+            MediaScan scan = new MediaScan();
+            org.json.JSONArray urls = root.optJSONArray("urls");
+
+            for (int i = 0; urls != null && i < urls.length(); i++) {
+                scan.add(null, 0, urls.optString(i, ""));
+            }
+
+            stream.mp4Url = scan.mp4.isEmpty() ? scan.best(scan.webm) : (String) scan.mp4.get(0)[1];
+            stream.hlsUrl = scan.hls;
+            stream.title = textOf(root.optString("title", null));
+
+            if (stream.title != null) {
+                stream.title = stream.title.replaceAll("\\s*[|\\-–—]\\s*Rumble.*$", "").trim();
+            }
+
+            stream.thumb = root.isNull("image") || root.optString("image", "").isEmpty() ? null : root.optString("image");
+            return stream.mp4Url != null || stream.hlsUrl != null ? stream : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
      * Collects media links from an unknown JSON layout: any string value that looks like a media url.
      */
     private static class MediaScan {
