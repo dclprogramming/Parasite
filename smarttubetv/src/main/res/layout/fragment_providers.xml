@@ -5,15 +5,38 @@
     android:clipChildren="false"
     android:clipToPadding="false">
 
-    <!-- Three cards share the width equally -->
     <LinearLayout
-        android:id="@+id/providers_row"
         android:layout_width="match_parent"
-        android:layout_height="300dp"
+        android:layout_height="wrap_content"
         android:layout_gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingStart="20dp"
-        android:paddingEnd="20dp"
+        android:orientation="vertical"
         android:clipChildren="false"
-        android:clipToPadding="false" />
+        android:clipToPadding="false">
+
+        <!-- Three cards share the width equally. Side padding is set in code so the row is 75% wide -->
+        <LinearLayout
+            android:id="@+id/providers_row"
+            android:layout_width="match_parent"
+            android:layout_height="225dp"
+            android:orientation="horizontal"
+            android:clipChildren="false"
+            android:clipToPadding="false" />
+
+        <TextView
+            android:id="@+id/provider_account_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="24dp"
+            android:paddingStart="26dp"
+            android:paddingEnd="26dp"
+            android:paddingTop="12dp"
+            android:paddingBottom="12dp"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:fontFamily="sans-serif-medium"
+            android:focusable="true"
+            android:focusableInTouchMode="true"
+            android:clickable="true" />
+    </LinearLayout>
 </FrameLayout>

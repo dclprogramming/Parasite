@@ -39,6 +39,13 @@ final class RumbleHttp {
         return BrowserFetcher.fetch(ORIGIN, url);
     }
 
+    /**
+     * Always through the hidden browser, which holds the login cookies.
+     */
+    static String getWithSession(String path) throws IOException {
+        return BrowserFetcher.fetch(ORIGIN, ORIGIN + path);
+    }
+
     private static Map<String, String> headers(String referer, boolean json) {
         Map<String, String> headers = new HashMap<>();
         headers.put("User-Agent", DESKTOP_UA);

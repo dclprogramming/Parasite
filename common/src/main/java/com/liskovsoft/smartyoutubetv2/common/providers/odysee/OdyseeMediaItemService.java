@@ -37,11 +37,7 @@ public class OdyseeMediaItemService extends StubMediaItemService {
 
     @Override
     public MediaItemFormatInfo getFormatInfo(String videoId) {
-        try {
-            return loadFormatInfo(videoId);
-        } catch (IOException e) {
-            throw new IllegalStateException(e);
-        }
+        return loadFormatInfo(videoId);
     }
 
     @Override
@@ -64,7 +60,15 @@ public class OdyseeMediaItemService extends StubMediaItemService {
         return getFormatInfoObserve(videoId);
     }
 
-    private MediaItemFormatInfo loadFormatInfo(String videoId) throws IOException {
+    private MediaItemFormatInfo loadFormatInfo(String videoId) {
+        try {
+            return loadFormatInfoOrThrow(videoId);
+        } catch (IOException e) {
+            return ProviderFormatInfo.unplayable(videoId, "Odysee: " + e.getMessage());
+        }
+    }
+
+    private MediaItemFormatInfo loadFormatInfoOrThrow(String videoId) throws IOException {
         OdyseeClaim claim = videoId != null ? OdyseeApi.claimById(videoId) : null;
 
         if (claim == null) {
@@ -75,11 +79,25 @@ public class OdyseeMediaItemService extends StubMediaItemService {
             return ProviderFormatInfo.unplayable(videoId, "Paid videos are not supported");
         }
 
+        if (claim.isRestricted) {
+            return ProviderFormatInfo.unplayable(videoId, "Members-only or purchased videos are not supported yet");
+        }
+
         if (!claim.isPlayable()) {
             return ProviderFormatInfo.unplayable(videoId, "This video can't be played here");
         }
 
-        String url = OdyseeApi.resolveStreamUrl(claim);
+        OdyseeApi.StreamLookup lookup = OdyseeApi.resolveStreamUrl(claim);
+
+        if (lookup.url == null) {
+            String reason = lookup.failureCode == 401 || lookup.failureCode == 403
+                    ? "Odysee wants an account or membership for this video (HTTP " + lookup.failureCode + ")"
+                    : lookup.failureCode == 404 ? "Odysee has no stream for this video (HTTP 404)"
+                    : "Could not reach Odysee's video servers";
+            return ProviderFormatInfo.unplayable(videoId, reason);
+        }
+
+        String url = lookup.url;
 
         mStore.addToHistory(claim.toMediaItem());
 

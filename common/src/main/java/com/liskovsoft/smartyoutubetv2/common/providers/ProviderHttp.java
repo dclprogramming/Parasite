@@ -31,7 +31,11 @@ public final class ProviderHttp {
     }
 
     public static String postJson(String url, String json) throws IOException {
-        Map<String, String> headers = headers(null);
+        return postJson(url, json, null);
+    }
+
+    public static String postJson(String url, String json, Map<String, String> extraHeaders) throws IOException {
+        Map<String, String> headers = headers(extraHeaders);
         headers.put("Content-Type", "application/json");
         return execute(OkHttpManager.instance().doPostRequest(url, headers, json, "application/json"), url);
     }
@@ -40,15 +44,23 @@ public final class ProviderHttp {
      * Checks that the url is playable: asks for the first byte only.
      */
     public static boolean isReachable(String url) {
+        int code = probe(url);
+        return code == 200 || code == 206;
+    }
+
+    /**
+     * HTTP status of a one-byte request, or 0 when the server could not be reached.
+     */
+    public static int probe(String url) {
         Response response = null;
 
         try {
             Map<String, String> headers = headers(null);
             headers.put("Range", "bytes=0-0");
             response = OkHttpManager.instance().doGetRequest(url, headers);
-            return response != null && (response.code() == 200 || response.code() == 206);
+            return response != null ? response.code() : 0;
         } catch (RuntimeException e) {
-            return false;
+            return 0;
         } finally {
             if (response != null && response.body() != null) {
                 response.body().close();

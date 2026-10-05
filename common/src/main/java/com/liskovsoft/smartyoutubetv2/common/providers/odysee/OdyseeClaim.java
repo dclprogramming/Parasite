@@ -17,6 +17,7 @@ public class OdyseeClaim {
     public String mediaType;
     public boolean isChannel;
     public boolean isPaid;
+    public boolean isRestricted; // members-only, purchase or rental: needs an account
     public long durationSec;
     public long releaseTimeSec;
     public String channelId;
@@ -53,6 +54,15 @@ public class OdyseeClaim {
             JSONObject video = value.optJSONObject("video");
             claim.durationSec = video != null ? video.optLong("duration") : 0;
             claim.isPaid = value.optJSONObject("fee") != null;
+            org.json.JSONArray tags = value.optJSONArray("tags");
+
+            for (int i = 0; tags != null && i < tags.length(); i++) {
+                String tag = tags.optString(i, "");
+
+                if (tag.startsWith("c:members") || tag.startsWith("c:purchase") || tag.startsWith("c:rental") || tag.equals("members-only")) {
+                    claim.isRestricted = true;
+                }
+            }
             claim.releaseTimeSec = parseLong(optString(value, "release_time"));
         }
 
@@ -97,7 +107,7 @@ public class OdyseeClaim {
     }
 
     public boolean isPlayable() {
-        return !isChannel && !isPaid && sdHash != null && sdHash.length() >= 6;
+        return !isChannel && !isPaid && !isRestricted && sdHash != null && sdHash.length() >= 6;
     }
 
     public ProviderMediaItem toMediaItem() {

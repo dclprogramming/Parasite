@@ -60,14 +60,43 @@ public final class RumbleApi {
      * Metadata and stream urls of a video. {@code videoId} is the short embed id, e.g. "v7cwvbs".
      */
     public static RumbleParser.Stream stream(String videoId) throws IOException {
-        String json = RumbleHttp.get("/embedJS/u3/?request=video&ver=2&v=" + encode(videoId), SITE + "/embed/" + videoId + "/", true);
-        RumbleParser.Stream stream = RumbleParser.parseEmbed(json);
+        IOException last = null;
 
-        if (stream == null) {
-            throw new IOException("Unexpected Rumble response for " + videoId);
+        for (String version : new String[]{"u4", "u3"}) {
+            try {
+                String json = RumbleHttp.get("/embedJS/" + version + "/?request=video&ver=2&v=" + encode(videoId), SITE + "/embed/" + videoId + "/", true);
+                RumbleParser.Stream stream = RumbleParser.parseEmbed(json);
+
+                if (stream != null) {
+                    return stream;
+                }
+
+                last = new IOException("Unexpected Rumble response (" + version + ")");
+            } catch (IOException e) {
+                last = e;
+            }
         }
 
-        return stream;
+        throw last != null ? last : new IOException("Rumble did not answer");
+    }
+
+    /**
+     * Like {@link #listing} but always through the hidden browser, so the signed-in session cookies are sent.
+     */
+    public static List<RumbleParser.Entry> listingSignedIn(String path, int page) throws IOException {
+        if (page > 1) {
+            path += (path.contains("?") ? "&" : "?") + "page=" + page;
+        }
+
+        return RumbleParser.parseListing(RumbleHttp.getWithSession(path));
+    }
+
+    /**
+     * Does the home page show the signed-in header? Uses the browser session.
+     */
+    public static boolean looksSignedIn() throws IOException {
+        String html = RumbleHttp.getWithSession("/").toLowerCase(java.util.Locale.US);
+        return html.contains("/logout") || html.contains("sign out") || html.contains("log out");
     }
 
     private static String encode(String value) {

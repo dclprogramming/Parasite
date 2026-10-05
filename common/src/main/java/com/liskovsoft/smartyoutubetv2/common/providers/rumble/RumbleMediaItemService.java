@@ -37,11 +37,7 @@ public class RumbleMediaItemService extends StubMediaItemService {
 
     @Override
     public MediaItemFormatInfo getFormatInfo(String videoId) {
-        try {
-            return loadFormatInfo(videoId);
-        } catch (IOException e) {
-            throw new IllegalStateException(e);
-        }
+        return loadFormatInfo(videoId);
     }
 
     @Override
@@ -64,7 +60,15 @@ public class RumbleMediaItemService extends StubMediaItemService {
         return getFormatInfoObserve(videoId);
     }
 
-    private MediaItemFormatInfo loadFormatInfo(String videoId) throws IOException {
+    private MediaItemFormatInfo loadFormatInfo(String videoId) {
+        try {
+            return loadFormatInfoOrThrow(videoId);
+        } catch (IOException e) {
+            return ProviderFormatInfo.unplayable(videoId, "Rumble: " + e.getMessage());
+        }
+    }
+
+    private MediaItemFormatInfo loadFormatInfoOrThrow(String videoId) throws IOException {
         if (videoId == null) {
             return ProviderFormatInfo.unplayable(null, "Video not found on Rumble");
         }

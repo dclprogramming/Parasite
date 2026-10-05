@@ -74,8 +74,7 @@ public class AddDevicePresenter extends BasePresenter<AddDeviceView> {
 
     public void start() {
         if (ProviderData.getSelected() != ProviderData.YOUTUBE) {
-            MessageHelpers.showLongMessage(getContext(), getContext().getString(R.string.provider_no_login_msg,
-                    getContext().getString(ProviderData.getSelected() == ProviderData.RUMBLE ? R.string.provider_rumble : R.string.provider_odysee)));
+            MessageHelpers.showLongMessage(getContext(), R.string.provider_youtube_only_msg);
             return;
         }
 

@@ -16,7 +16,10 @@
     <string name="provider_status_active">Active</string>
     <string name="provider_status_select">Select</string>
     <string name="provider_status_soon">Coming soon</string>
-    <string name="provider_no_login_msg">%1$s needs no login here. Followed channels and watch history are saved on this device.</string>
+    <string name="provider_youtube_only_msg">Device linking is only available for YouTube.</string>
+    <string name="provider_signin_button">Sign in to %1$s</string>
+    <string name="provider_signout_button">Signed in to %1$s • Sign out</string>
+    <string name="provider_account_hint">YouTube sign-in is in Settings → Accounts</string>
     <string name="provider_switching_toast">Switching to %1$s…</string>
     <string name="provider_soon_toast">%1$s support is coming soon. Staying on YouTube.</string>
     <string name="header_channels">Channels</string>

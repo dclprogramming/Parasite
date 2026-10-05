@@ -3,7 +3,9 @@ package com.liskovsoft.smartyoutubetv2.common.providers.rumble;
 import com.liskovsoft.mediaserviceinterfaces.data.MediaGroup;
 import com.liskovsoft.mediaserviceinterfaces.data.MediaItem;
 import com.liskovsoft.sharedutils.rx.RxHelper;
+import com.liskovsoft.smartyoutubetv2.common.prefs.ProviderData;
 import com.liskovsoft.smartyoutubetv2.common.providers.LocalContentBase;
+import com.liskovsoft.smartyoutubetv2.common.providers.ProviderAuth;
 import com.liskovsoft.smartyoutubetv2.common.providers.ProviderStore;
 import com.liskovsoft.smartyoutubetv2.common.providers.model.ProviderMediaGroup;
 import com.liskovsoft.smartyoutubetv2.common.providers.model.ProviderMediaItem;
@@ -130,7 +132,65 @@ public class RumbleContentService extends LocalContentBase {
 
     @Override
     public Observable<MediaGroup> getSubscriptionsObserve() {
-        return RxHelper.fromCallable(this::subscriptionsFeed);
+        return RxHelper.fromCallable(() -> {
+            if (isSignedIn()) { // the account's own feed
+                try {
+                    ProviderMediaGroup feed = accountPage(1);
+
+                    if (!feed.isEmpty()) {
+                        return feed;
+                    }
+                } catch (IOException e) {
+                    // Fall back to the local follow list
+                }
+            }
+
+            return subscriptionsFeed();
+        });
+    }
+
+    private boolean isSignedIn() {
+        return ProviderAuth.isSignedIn(ProviderData.getAppContext(), ProviderData.RUMBLE);
+    }
+
+    private ProviderMediaGroup accountPage(int page) throws IOException {
+        List<RumbleParser.Entry> entries = RumbleApi.listingSignedIn("/subscriptions", page);
+        ProviderMediaGroup group = new ProviderMediaGroup(MediaGroup.TYPE_SUBSCRIPTIONS, "Subscriptions");
+
+        for (RumbleParser.Entry entry : entries) {
+            group.add(entry.toMediaItem());
+        }
+
+        if (entries.size() >= RumbleApi.MIN_FULL_PAGE) {
+            group.setNext(() -> accountPage(page + 1));
+        }
+
+        return group;
+    }
+
+    @Override
+    protected MediaGroup channelsGroup(boolean sortByName) {
+        ProviderMediaGroup group = (ProviderMediaGroup) super.channelsGroup(sortByName);
+
+        if (isSignedIn()) { // add the channels seen in the account's subscription feed
+            try {
+                java.util.Set<String> known = new java.util.HashSet<>();
+
+                for (MediaItem item : group.getMediaItems()) {
+                    known.add(item.getChannelId());
+                }
+
+                for (RumbleParser.Entry entry : RumbleApi.listingSignedIn("/subscriptions", 1)) {
+                    if (entry.channelId != null && known.add(entry.channelId)) {
+                        group.add(ProviderMediaItem.channel(entry.channelId, entry.channelName, null));
+                    }
+                }
+            } catch (IOException e) {
+                // Local follows only
+            }
+        }
+
+        return group;
     }
 
     /**

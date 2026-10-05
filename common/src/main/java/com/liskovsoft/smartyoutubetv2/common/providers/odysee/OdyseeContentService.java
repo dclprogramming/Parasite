@@ -4,6 +4,8 @@ import com.liskovsoft.mediaserviceinterfaces.data.MediaGroup;
 import com.liskovsoft.mediaserviceinterfaces.data.MediaItem;
 import com.liskovsoft.sharedutils.rx.RxHelper;
 import com.liskovsoft.smartyoutubetv2.common.providers.LocalContentBase;
+import com.liskovsoft.smartyoutubetv2.common.prefs.ProviderData;
+import com.liskovsoft.smartyoutubetv2.common.providers.ProviderAuth;
 import com.liskovsoft.smartyoutubetv2.common.providers.ProviderStore;
 import com.liskovsoft.smartyoutubetv2.common.providers.model.ProviderMediaGroup;
 import com.liskovsoft.smartyoutubetv2.common.providers.model.ProviderMediaItem;
@@ -33,8 +35,35 @@ public class OdyseeContentService extends LocalContentBase {
         }
     }
 
+    private static boolean sSynced;
+
     public OdyseeContentService(ProviderStore store) {
         super(store);
+    }
+
+    /**
+     * Pulls the channels followed on the signed-in account, once per app run.
+     */
+    private void syncFollowsOnce() {
+        String token = ProviderAuth.getOdyseeToken(ProviderData.getAppContext());
+
+        if (token == null || sSynced) {
+            return;
+        }
+
+        sSynced = true;
+
+        try {
+            OdyseeAccount.importFollows(mStore, token);
+        } catch (Exception e) {
+            sSynced = false; // try again next time
+        }
+    }
+
+    @Override
+    protected MediaGroup channelsGroup(boolean sortByName) {
+        syncFollowsOnce();
+        return super.channelsGroup(sortByName);
     }
 
     // Rows (home and categories)
@@ -134,6 +163,7 @@ public class OdyseeContentService extends LocalContentBase {
     @Override
     public Observable<MediaGroup> getSubscriptionsObserve() {
         return RxHelper.fromCallable(() -> {
+            syncFollowsOnce();
             List<String> ids = followedChannelIds();
 
             if (ids.isEmpty()) {

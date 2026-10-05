@@ -16,6 +16,7 @@ import androidx.core.graphics.ColorUtils;
 import androidx.fragment.app.Fragment;
 import androidx.leanback.app.BrowseSupportFragment;
 import com.liskovsoft.smartyoutubetv2.common.prefs.ProviderData;
+import com.liskovsoft.smartyoutubetv2.common.providers.ProviderLogin;
 import com.liskovsoft.smartyoutubetv2.common.utils.Utils;
 import com.liskovsoft.smartyoutubetv2.tv.R;
 import com.liskovsoft.smartyoutubetv2.tv.ui.browse.interfaces.Section;
@@ -34,6 +35,7 @@ public class ProvidersFragment extends Fragment implements BrowseSupportFragment
             new BrowseSupportFragment.MainFragmentAdapter<Fragment>(this);
     private final View[] mCards = new View[ProviderData.COUNT];
     private final boolean[] mFocused = new boolean[ProviderData.COUNT];
+    private TextView mAccountButton;
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -49,6 +51,20 @@ public class ProvidersFragment extends Fragment implements BrowseSupportFragment
     public View onCreateView(LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View root = inflater.inflate(R.layout.fragment_providers, container, false);
         LinearLayout row = root.findViewById(R.id.providers_row);
+
+        // Cards take 75% of the page width, centered
+        root.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
+            int pad = (int) ((r - l) * 0.125f);
+
+            if (row.getPaddingLeft() != pad) {
+                row.setPadding(pad, 0, pad, 0);
+            }
+        });
+
+        mAccountButton = root.findViewById(R.id.provider_account_button);
+        mAccountButton.setOnClickListener(v -> onAccountClicked());
+        mAccountButton.setOnKeyListener((v, keyCode, event) -> onAccountKey(keyCode, event));
+        mAccountButton.setOnFocusChangeListener((v, hasFocus) -> bindAccountButton());
 
         for (int i = 0; i < ProviderData.COUNT; i++) {
             final int provider = i;
@@ -67,6 +83,8 @@ public class ProvidersFragment extends Fragment implements BrowseSupportFragment
             row.addView(card);
             bindCard(i);
         }
+
+        bindAccountButton();
 
         return root;
     }
@@ -107,12 +125,74 @@ public class ProvidersFragment extends Fragment implements BrowseSupportFragment
             return true; // never let focus leave or wrap around at the last card
         }
 
+        if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+            if (mAccountButton != null && mAccountButton.getVisibility() == View.VISIBLE) {
+                mAccountButton.requestFocus();
+            }
+            return true;
+        }
+
         if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT && provider > 0 && mCards[provider - 1] != null) {
             mCards[provider - 1].requestFocus();
             return true;
         }
 
         return false; // LEFT on the first card goes back to the sidebar
+    }
+
+    private boolean onAccountKey(int keyCode, KeyEvent event) {
+        if (event.getAction() != KeyEvent.ACTION_DOWN) {
+            return false;
+        }
+
+        if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+            View card = mCards[ProviderData.getSelected(getContext())];
+
+            if (card != null) {
+                card.requestFocus();
+            }
+            return true;
+        }
+
+        // Keep Leanback from hijacking the other directions
+        return keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT || keyCode == KeyEvent.KEYCODE_DPAD_DOWN;
+    }
+
+    private void onAccountClicked() {
+        if (ProviderLogin.isSignedIn(getContext())) {
+            ProviderLogin.signOut(getContext(), this::bindAccountButton);
+        } else {
+            ProviderLogin.start(getContext(), this::bindAccountButton);
+        }
+    }
+
+    /** Sign in / out button of the active provider. YouTube has its own sign-in under Settings. */
+    private void bindAccountButton() {
+        if (mAccountButton == null || getContext() == null) {
+            return;
+        }
+
+        int provider = ProviderData.getSelected(getContext());
+
+        if (provider == ProviderData.YOUTUBE) {
+            mAccountButton.setVisibility(View.GONE);
+            return;
+        }
+
+        mAccountButton.setVisibility(View.VISIBLE);
+        String name = getString(NAMES[provider]);
+        boolean signedIn = ProviderLogin.isSignedIn(getContext());
+        mAccountButton.setText(signedIn ? getString(R.string.provider_signout_button, name) : getString(R.string.provider_signin_button, name));
+
+        GradientDrawable bg = new GradientDrawable();
+        bg.setCornerRadius(UiStyle.dp(getContext(), 24));
+        bg.setColor(mAccountButton.hasFocus() ? 0x66FFFFFF : 0x33FFFFFF);
+
+        if (mAccountButton.hasFocus()) {
+            bg.setStroke((int) UiStyle.dp(getContext(), 2), Color.WHITE);
+        }
+
+        mAccountButton.setBackground(bg);
     }
 
     private void onProviderClicked(int provider) {

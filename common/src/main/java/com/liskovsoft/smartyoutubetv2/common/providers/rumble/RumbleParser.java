@@ -307,6 +307,19 @@ public final class RumbleParser {
                 }
             }
 
+            if (stream.mp4Url == null) { // layout differs: look for media links anywhere in the JSON
+                MediaScan scan = new MediaScan();
+                scan.visit(null, root);
+                stream.mp4Url = scan.best(scan.mp4);
+
+                if (stream.mp4Url == null) {
+                    stream.mp4Url = scan.best(scan.webm);
+                }
+                if (stream.hlsUrl == null) {
+                    stream.hlsUrl = scan.hls;
+                }
+            }
+
             if (stream.mp4Url == null) { // older embed format
                 JSONObject u = root.optJSONObject("u");
                 JSONObject mp4 = u != null ? u.optJSONObject("mp4") : null;
@@ -316,6 +329,81 @@ public final class RumbleParser {
             return stream;
         } catch (Exception e) {
             return null;
+        }
+    }
+
+    /**
+     * Collects media links from an unknown JSON layout: any string value that looks like a media url.
+     */
+    private static class MediaScan {
+        final List<Object[]> mp4 = new ArrayList<>(); // {height, url}
+        final List<Object[]> webm = new ArrayList<>();
+        String hls;
+
+        void visit(String key, Object node) {
+            if (node instanceof JSONObject) {
+                JSONObject object = (JSONObject) node;
+                JSONObject meta = object.optJSONObject("meta");
+                int height = meta != null ? meta.optInt("h", 0) : 0;
+
+                if (height == 0 && key != null) {
+                    height = parseInt(key);
+                }
+
+                Iterator<String> keys = object.keys();
+
+                while (keys.hasNext()) {
+                    String child = keys.next();
+                    Object value = object.opt(child);
+
+                    if (value instanceof String) {
+                        add(child.equals("url") ? key : child, height, (String) value);
+                    } else {
+                        visit(child, value);
+                    }
+                }
+            } else if (node instanceof org.json.JSONArray) {
+                org.json.JSONArray array = (org.json.JSONArray) node;
+
+                for (int i = 0; i < array.length(); i++) {
+                    visit(key, array.opt(i));
+                }
+            }
+        }
+
+        private void add(String key, int height, String value) {
+            String lower = value.toLowerCase(Locale.US);
+
+            if (!lower.startsWith("http")) {
+                return;
+            }
+
+            int h = height > 0 ? height : parseInt(key != null ? key : "");
+
+            if (lower.contains(".mp4")) {
+                mp4.add(new Object[]{h, value});
+            } else if (lower.contains(".webm")) {
+                webm.add(new Object[]{h, value});
+            } else if (lower.contains(".m3u8") && hls == null) {
+                hls = value;
+            }
+        }
+
+        /** Highest resolution up to 1080p, else the first one. */
+        String best(List<Object[]> list) {
+            String best = null;
+            int bestHeight = -1;
+
+            for (Object[] entry : list) {
+                int h = (Integer) entry[0];
+
+                if (h <= 1080 && h > bestHeight) {
+                    bestHeight = h;
+                    best = (String) entry[1];
+                }
+            }
+
+            return best != null ? best : (list.isEmpty() ? null : (String) list.get(0)[1]);
         }
     }
 

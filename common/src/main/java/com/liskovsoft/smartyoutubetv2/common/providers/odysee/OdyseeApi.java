@@ -209,11 +209,103 @@ public final class OdyseeApi {
     }
 
     /**
-     * Direct mp4 stream url of a free claim. Tries known CDN hosts and returns the first that answers.
+     * Channels the account follows (preferences saved by the Odysee web app), as lbry:// urls.
      */
-    public static String resolveStreamUrl(OdyseeClaim claim) {
+    public static List<String> followedUris(String authToken) throws IOException {
+        JSONObject params = new JSONObject();
+
+        try {
+            params.put("key", "shared");
+        } catch (JSONException e) {
+            throw new IOException(e);
+        }
+
+        return parseFollowedUris(rpc("preference_get", params, authToken));
+    }
+
+    static List<String> parseFollowedUris(JSONObject result) {
+        JSONObject shared = result.optJSONObject("shared") != null ? result.optJSONObject("shared") : result;
+        JSONObject value = shared.optJSONObject("value") != null ? shared.optJSONObject("value") : shared;
+        java.util.LinkedHashSet<String> uris = new java.util.LinkedHashSet<>();
+
+        JSONArray subscriptions = value.optJSONArray("subscriptions");
+        for (int i = 0; subscriptions != null && i < subscriptions.length(); i++) {
+            String uri = subscriptions.optString(i, null);
+
+            if (uri != null && uri.startsWith("lbry://")) {
+                uris.add(uri);
+            }
+        }
+
+        JSONArray following = value.optJSONArray("following");
+        for (int i = 0; following != null && i < following.length(); i++) {
+            JSONObject entry = following.optJSONObject(i);
+            String uri = entry != null ? entry.optString("uri", null) : null;
+
+            if (uri != null && uri.startsWith("lbry://")) {
+                uris.add(uri);
+            }
+        }
+
+        return new ArrayList<>(uris);
+    }
+
+    /**
+     * Channel claims for lbry:// urls (in batches). Urls that don't resolve are skipped.
+     */
+    public static List<OdyseeClaim> resolveChannels(List<String> uris) throws IOException {
+        List<OdyseeClaim> result = new ArrayList<>();
+
+        for (int from = 0; from < uris.size(); from += 40) {
+            JSONArray urls = new JSONArray();
+
+            for (String uri : uris.subList(from, Math.min(uris.size(), from + 40))) {
+                urls.put(uri);
+            }
+
+            JSONObject params = new JSONObject();
+
+            try {
+                params.put("urls", urls);
+            } catch (JSONException e) {
+                throw new IOException(e);
+            }
+
+            result.addAll(parseResolvedChannels(rpc("resolve", params)));
+        }
+
+        return result;
+    }
+
+    static List<OdyseeClaim> parseResolvedChannels(JSONObject resolved) {
+        List<OdyseeClaim> result = new ArrayList<>();
+        java.util.Iterator<String> keys = resolved.keys();
+
+        while (keys.hasNext()) {
+            OdyseeClaim claim = OdyseeClaim.from(resolved.optJSONObject(keys.next()));
+
+            if (claim != null && claim.isChannel) {
+                result.add(claim);
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Result of looking for a playable stream url.
+     */
+    public static class StreamLookup {
+        public String url;       // null when nothing could be played
+        public int failureCode;  // 401/403 when the CDN wants an account, 404 when missing, 0 when unreachable
+    }
+
+    /**
+     * Direct mp4 stream url of a free claim. Tries known CDN hosts and url formats and returns the first that answers.
+     */
+    public static StreamLookup resolveStreamUrl(OdyseeClaim claim) {
         String sdHash6 = claim.sdHash.substring(0, 6);
-        String first = null;
+        StreamLookup lookup = new StreamLookup();
 
         for (String host : STREAM_HOSTS) {
             String[] candidates = {
@@ -223,17 +315,20 @@ public final class OdyseeApi {
             };
 
             for (String url : candidates) {
-                if (first == null) {
-                    first = url;
+                int code = ProviderHttp.probe(url);
+
+                if (code == 200 || code == 206) {
+                    lookup.url = url;
+                    return lookup;
                 }
 
-                if (ProviderHttp.isReachable(url)) {
-                    return url;
+                if (code == 401 || code == 403 || lookup.failureCode == 0) {
+                    lookup.failureCode = code; // an auth answer is the most telling one
                 }
             }
         }
 
-        return first; // let the player report the error
+        return lookup;
     }
 
     private static JSONObject buildParams(Query query, int page) throws IOException {
@@ -245,6 +340,10 @@ public final class OdyseeApi {
     }
 
     private static JSONObject rpc(String method, JSONObject params) throws IOException {
+        return rpc(method, params, null);
+    }
+
+    private static JSONObject rpc(String method, JSONObject params, String authToken) throws IOException {
         IOException last = null;
 
         for (String host : API_HOSTS) {
@@ -255,7 +354,14 @@ public final class OdyseeApi {
                 body.put("params", params);
                 body.put("id", 1);
 
-                String response = ProviderHttp.postJson(host + "/api/v1/proxy?m=" + method, body.toString());
+                java.util.Map<String, String> headers = null;
+
+                if (authToken != null) {
+                    headers = new java.util.HashMap<>();
+                    headers.put("X-Lbry-Auth-Token", authToken);
+                }
+
+                String response = ProviderHttp.postJson(host + "/api/v1/proxy?m=" + method, body.toString(), headers);
                 JSONObject json = new JSONObject(response);
 
                 if (json.has("error") && !json.isNull("error")) {

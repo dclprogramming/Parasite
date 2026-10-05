@@ -3,6 +3,7 @@ package com.liskovsoft.smartyoutubetv2.common.providers;
 import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -22,6 +23,7 @@ import java.util.concurrent.TimeUnit;
  * so they carry the browser's cookies and fingerprint.
  */
 public final class BrowserFetcher {
+    private static final String TAG = "ParasiteBrowser";
     private static final long TIMEOUT_SEC = 45;
     private static final int CHECK_ATTEMPTS = 25; // one per second
     private static final Object LOCK = new Object(); // one request at a time
@@ -100,6 +102,7 @@ public final class BrowserFetcher {
                 waitForBrowserCheck(view, origin, url, request, 0);
             }
         } catch (Throwable e) { // e.g. no WebView installed on this device
+            Log.e(TAG, "WebView failed", e);
             request.finish(0, null, "Browser fetch is not available: " + e);
         }
     }
@@ -168,10 +171,12 @@ public final class BrowserFetcher {
     }
 
     /** Called from the page (a background thread). */
-    private static class Bridge {
+    public static class Bridge {
         @JavascriptInterface
         public void done(int status, String body) {
             Request request = sCurrent;
+
+            Log.d(TAG, "fetch finished, status " + status);
 
             if (request != null) {
                 request.finish(status, body, null);
