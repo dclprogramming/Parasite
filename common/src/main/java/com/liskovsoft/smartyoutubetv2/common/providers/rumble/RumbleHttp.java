@@ -26,7 +26,13 @@ final class RumbleHttp {
 
         if (!sBrowserOnly) {
             try {
-                return ProviderHttp.get(url, headers(referer, json));
+                String body = ProviderHttp.get(url, headers(referer, json));
+
+                if (!isBlockPage(body, json)) {
+                    return body;
+                }
+
+                sBrowserOnly = true; // answered 200 but with a check page instead of the data
             } catch (HttpStatusException e) {
                 if (e.code != 403 && e.code != 429 && e.code != 503) {
                     throw e;
@@ -37,6 +43,21 @@ final class RumbleHttp {
         }
 
         return BrowserFetcher.fetch(ORIGIN, url);
+    }
+
+    /**
+     * Is this answer a bot-check / error page instead of the requested data?
+     */
+    static boolean isBlockPage(String body, boolean json) {
+        String text = body == null ? "" : body.trim();
+
+        if (json) {
+            return !(text.startsWith("{") || text.startsWith("["));
+        }
+
+        String head = (text.length() > 4000 ? text.substring(0, 4000) : text).toLowerCase(java.util.Locale.US);
+        return head.contains("just a moment") || head.contains("cf-chl") || head.contains("challenge-platform")
+                || head.contains("enable javascript and cookies");
     }
 
     /**

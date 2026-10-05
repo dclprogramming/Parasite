@@ -143,7 +143,8 @@ public final class BrowserFetcher {
                     if (result != null && !result.isEmpty()) {
                         request.finish(200, result, null);
                     } else if (attempt + 1 >= maxAttempts) {
-                        request.finish(0, null, "The page's player did not start (title: " + pageTitleHint(view) + ")");
+                        view.evaluateJavascript(DIAGNOSE, state -> request.finish(0, null,
+                                "The page's player did not start (" + decodeJsString(state) + ")"));
                     } else {
                         pollScrape(view, script, request, attempt + 1, maxAttempts);
                     }
@@ -154,10 +155,9 @@ public final class BrowserFetcher {
         }, 1000);
     }
 
-    private static String pageTitleHint(WebView view) {
-        String title = view.getTitle();
-        return title != null ? title : "none";
-    }
+    /** What the page looks like: title, whether a video element exists, and the start of its text. */
+    private static final String DIAGNOSE = "(function(){var t=document.body?document.body.innerText.replace(/\\s+/g,' ').substring(0,60):'';"
+            + "return 'title: '+document.title+'; video element: '+(document.querySelector('video')?'yes':'no')+'; text: '+t;})()";
 
     /** evaluateJavascript hands back a JSON-encoded value: "\"text\"" or null. */
     private static String decodeJsString(String value) {
@@ -197,6 +197,7 @@ public final class BrowserFetcher {
             WebSettings settings = view.getSettings();
             settings.setJavaScriptEnabled(true);
             settings.setDomStorageEnabled(true);
+            settings.setMediaPlaybackRequiresUserGesture(false); // let embedded players start on their own
             settings.setUserAgentString(settings.getUserAgentString().replace("; wv", "")); // look like plain Chrome
             view.addJavascriptInterface(new Bridge(), "ParasiteBridge");
             view.setWebViewClient(new WebViewClient() {

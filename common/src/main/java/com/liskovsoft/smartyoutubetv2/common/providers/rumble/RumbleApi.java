@@ -15,7 +15,10 @@ public final class RumbleApi {
     private static final String SITE = "https://rumble.com";
     /** Runs inside the embed page: lists the media urls the page's player has loaded. Returns "" until there is one. */
     private static final String PLAYER_SCRIPT = "(function(){var o={src:'',urls:[],title:document.title||'',image:''};"
-            + "var v=document.querySelector('video');if(v){o.src=v.currentSrc||v.src||'';}"
+            + "var v=document.querySelector('video');"
+            + "if(v){try{v.muted=true;v.play();}catch(e){}o.src=v.currentSrc||v.src||'';}"
+            + "var b=document.querySelector('[class*=\"play-button\"],[class*=\"PlayButton\"],[class*=\"big-play\"],button[aria-label*=\"lay\"]');"
+            + "if(b){try{b.click();}catch(e){}}"
             + "try{performance.getEntriesByType('resource').forEach(function(r){if(/\\.(mp4|m3u8|webm)(\\?|$)/i.test(r.name)){o.urls.push(r.name);}});}catch(e){}"
             + "if(o.src&&o.src.indexOf('blob:')!==0){o.urls.push(o.src);}"
             + "var m=document.querySelector('meta[property=\"og:image\"]');if(m){o.image=m.content;}"
@@ -79,7 +82,7 @@ public final class RumbleApi {
                     return stream;
                 }
 
-                problems.append(version).append(": ").append(stream == null ? "not JSON" : "no stream in answer").append("; ");
+                problems.append(version).append(": ").append(stream == null ? "not JSON (" + snippet(json) + ")" : "no stream in answer").append("; ");
             } catch (IOException e) {
                 problems.append(version).append(": ").append(e.getMessage()).append("; ");
             }
@@ -118,6 +121,12 @@ public final class RumbleApi {
     public static boolean looksSignedIn() throws IOException {
         String html = RumbleHttp.getWithSession("/").toLowerCase(java.util.Locale.US);
         return html.contains("/logout") || html.contains("sign out") || html.contains("log out");
+    }
+
+    /** First characters of an answer, for error messages. */
+    private static String snippet(String text) {
+        String flat = text == null ? "" : text.replaceAll("\\s+", " ").trim();
+        return flat.length() > 70 ? flat.substring(0, 70) : flat;
     }
 
     private static String encode(String value) {
