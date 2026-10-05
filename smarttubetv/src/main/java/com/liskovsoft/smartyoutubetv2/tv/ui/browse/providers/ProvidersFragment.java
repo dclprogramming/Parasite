@@ -4,6 +4,7 @@ import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -54,6 +55,8 @@ public class ProvidersFragment extends Fragment implements BrowseSupportFragment
             View card = inflater.inflate(R.layout.provider_card, row, false);
 
             card.setOnClickListener(v -> onProviderClicked(provider));
+            // Leanback's BrowseFrameLayout hijacks LEFT/RIGHT focus search of plain views inside a page, so move between cards by hand
+            card.setOnKeyListener((v, keyCode, event) -> onCardKey(provider, keyCode, event));
             card.setOnFocusChangeListener((v, hasFocus) -> {
                 mFocused[provider] = hasFocus;
                 bindCard(provider);
@@ -90,6 +93,26 @@ public class ProvidersFragment extends Fragment implements BrowseSupportFragment
     @Override
     public boolean isEmpty() {
         return false;
+    }
+
+    private boolean onCardKey(int provider, int keyCode, KeyEvent event) {
+        if (event.getAction() != KeyEvent.ACTION_DOWN) {
+            return false;
+        }
+
+        if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
+            if (provider + 1 < ProviderData.COUNT && mCards[provider + 1] != null) {
+                mCards[provider + 1].requestFocus();
+            }
+            return true; // never let focus leave or wrap around at the last card
+        }
+
+        if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT && provider > 0 && mCards[provider - 1] != null) {
+            mCards[provider - 1].requestFocus();
+            return true;
+        }
+
+        return false; // LEFT on the first card goes back to the sidebar
     }
 
     private void onProviderClicked(int provider) {
