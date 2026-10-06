@@ -200,6 +200,10 @@ public final class BrowserFetcher {
             settings.setMediaPlaybackRequiresUserGesture(false); // let embedded players start on their own
             settings.setUserAgentString(settings.getUserAgentString().replace("; wv", "")); // look like plain Chrome
             view.addJavascriptInterface(new Bridge(), "ParasiteBridge");
+            // Never shown, but pages lay out for a desktop-sized window and load everything inside it
+            view.measure(android.view.View.MeasureSpec.makeMeasureSpec(1280, android.view.View.MeasureSpec.EXACTLY),
+                    android.view.View.MeasureSpec.makeMeasureSpec(4000, android.view.View.MeasureSpec.EXACTLY));
+            view.layout(0, 0, 1280, 4000);
             view.setWebViewClient(new WebViewClient() {
                 @Override
                 public void onPageFinished(WebView v, String pageUrl) {

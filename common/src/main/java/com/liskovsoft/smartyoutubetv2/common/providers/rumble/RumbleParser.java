@@ -193,6 +193,45 @@ public final class RumbleParser {
         }
     }
 
+    /**
+     * Cards read from the rendered page by {@link RumbleApi#EXTRACT_SCRIPT}.
+     */
+    public static List<Entry> parseRendered(String json) {
+        List<Entry> result = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+
+        try {
+            org.json.JSONArray array = new org.json.JSONArray(json);
+
+            for (int i = 0; i < array.length(); i++) {
+                JSONObject card = array.optJSONObject(i);
+
+                if (card == null || card.optString("id", "").isEmpty() || !seen.add(card.optString("id"))) {
+                    continue;
+                }
+
+                Entry entry = new Entry();
+                entry.id = card.optString("id");
+                entry.stem = stemOf(entry.id, card.optString("slug", ""));
+                entry.title = firstNonEmpty(textOf(card.optString("title", "")), titleFromSlug(card.optString("slug", "")));
+                entry.thumb = blankToNull(card.optString("thumb", ""));
+                entry.channelId = blankToNull(card.optString("channelId", ""));
+                entry.channelName = blankToNull(card.optString("channelName", ""));
+                entry.durationSec = card.optLong("duration");
+                entry.publishedMs = parseIsoDate(blankToNull(card.optString("pub", "")));
+                result.add(entry);
+            }
+        } catch (org.json.JSONException e) {
+            // Unreadable result: no videos
+        }
+
+        return result;
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.trim().isEmpty() ? null : value.trim();
+    }
+
     private static Entry parseChunk(String chunk, String id, String slug) {
         Entry entry = new Entry();
         entry.id = id;

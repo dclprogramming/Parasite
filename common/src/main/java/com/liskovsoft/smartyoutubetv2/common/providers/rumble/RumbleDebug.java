@@ -37,8 +37,15 @@ final class RumbleDebug {
         return "Rumble " + path + ": no videos found. Page: " + html.length() + " chars, " + links + " video links, \"" + pageTitle + "\"";
     }
 
+    static synchronized void emptyRendered(String path) {
+        report("Rumble " + path + ": the page showed no video cards");
+    }
+
     static synchronized void emptyListing(String path, String html) {
-        String message = describe(path, html == null ? "" : html);
+        report(describe(path, html == null ? "" : html));
+    }
+
+    private static void report(String message) {
         Log.w(TAG, message);
 
         Context context = ProviderData.getAppContext();

@@ -21,7 +21,7 @@ import java.util.concurrent.Callable;
  * Rumble implementation of the app's content sections. There is no login: subscriptions and history are local.
  */
 public class RumbleContentService extends LocalContentBase {
-    private static final int MAX_FEED_CHANNELS = 12; // every followed channel is one page request
+    private static final int MAX_FEED_CHANNELS = 6; // every followed channel is one rendered page
 
     private static class Row {
         final String title;
@@ -73,13 +73,8 @@ public class RumbleContentService extends LocalContentBase {
         List<Row> rows = new ArrayList<>();
         rows.add(new Row("Editor picks", "/editor-picks"));
         rows.add(new Row("Top today", RumbleApi.browsePath("views", "today")));
-        rows.add(new Row("Top this week", RumbleApi.browsePath("views", "this-week")));
         rows.add(new Row("News", RumbleApi.categoryPath("news")));
         rows.add(new Row("Gaming", RumbleApi.categoryPath("gaming")));
-        rows.add(new Row("Entertainment", RumbleApi.categoryPath("entertainment")));
-        rows.add(new Row("Science & Technology", RumbleApi.categoryPath("science")));
-        rows.add(new Row("Sports", RumbleApi.categoryPath("sports")));
-        rows.add(new Row("Music", RumbleApi.categoryPath("music")));
         return rows;
     }
 
@@ -87,7 +82,6 @@ public class RumbleContentService extends LocalContentBase {
         List<Row> rows = new ArrayList<>();
         rows.add(new Row("Top today", RumbleApi.browsePath("views", "today")));
         rows.add(new Row("Top this week", RumbleApi.browsePath("views", "this-week")));
-        rows.add(new Row("Top this month", RumbleApi.browsePath("views", "this-month")));
         return rows;
     }
 
@@ -96,7 +90,6 @@ public class RumbleContentService extends LocalContentBase {
         List<Row> rows = new ArrayList<>();
         rows.add(new Row("Latest", path));
         rows.add(new Row("Top today", path + "?sort=views&date=today"));
-        rows.add(new Row("Top this week", path + "?sort=views&date=this-week"));
         return rows;
     }
 

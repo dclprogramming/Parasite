@@ -13,6 +13,89 @@ import java.util.List;
  */
 public final class RumbleApi {
     private static final String SITE = "https://rumble.com";
+    /**
+     * Runs inside the rendered page: finds each video card from its link, takes the biggest block that holds only that
+     * video, and reads title, picture, channel, length and date from it. Returns "" until the list is complete.
+     */
+    static final String EXTRACT_SCRIPT =
+            "(function(){\n"
+            + "  var w=window; w.__pa=(w.__pa||0)+1;\n"
+            + "  if(/just a moment|attention required/i.test(document.title||'')) return '';\n"
+            + "  var VID=/\\/(v[0-9a-z]{3,12})-([^\\/?#\"']*)\\.html/i;\n"
+            + "  function abs(u){try{return new URL(u,location.href).href;}catch(e){return u||'';}}\n"
+            + "  function text(el){return el?(el.textContent||'').replace(/\\s+/g,' ').trim():'';}\n"
+            + "  var root=document.querySelector('main')||document.querySelector('#main')||document.body;\n"
+            + "  function collect(strict){\n"
+            + "    var out=[];\n"
+            + "    [].forEach.call(root.querySelectorAll('a[href]'),function(a){\n"
+            + "      if(!VID.test(a.getAttribute('href')||'')) return;\n"
+            + "      if(strict&&a.closest('header,nav,aside,footer,[class*=\"sidebar\"],[class*=\"side-bar\"]')) return;\n"
+            + "      out.push(a);\n"
+            + "    });\n"
+            + "    return out;\n"
+            + "  }\n"
+            + "  var anchors=collect(true); if(!anchors.length) anchors=collect(false);\n"
+            + "  var seen={}, items=[];\n"
+            + "  anchors.forEach(function(a){\n"
+            + "    var m=VID.exec(a.getAttribute('href')||''); var id=m[1];\n"
+            + "    if(seen[id]) return; seen[id]=1;\n"
+            + "    var card=a, el=a;\n"
+            + "    while(el.parentElement&&el.parentElement!==root&&el.parentElement!==document.body&&el.parentElement!==document.documentElement){\n"
+            + "      var p=el.parentElement, ids={}, n=0;\n"
+            + "      [].forEach.call(p.querySelectorAll('a[href]'),function(x){var mm=VID.exec(x.getAttribute('href')||'');if(mm&&!ids[mm[1]]){ids[mm[1]]=1;n++;}});\n"
+            + "      if(n>1) break;\n"
+            + "      card=p; el=p;\n"
+            + "    }\n"
+            + "    items.push({id:id,slug:m[2],card:card,a:a});\n"
+            + "  });\n"
+            + "  if(!items.length){ return w.__pa>=8?'[]':''; }\n"
+            + "  function skipImg(im){return !!im.closest('address,[class*=\"channel\"],[class*=\"avatar\"],[class*=\"profile\"]');}\n"
+            + "  function imgUrl(card){\n"
+            + "    var imgs=card.querySelectorAll('img');\n"
+            + "    for(var i=0;i<imgs.length;i++){\n"
+            + "      var im=imgs[i]; if(skipImg(im)) continue;\n"
+            + "      var c=[im.currentSrc,im.getAttribute('src'),im.getAttribute('data-src'),im.getAttribute('data-lazy-src'),im.getAttribute('data-original')];\n"
+            + "      var ss=im.getAttribute('srcset')||im.getAttribute('data-srcset');\n"
+            + "      if(ss){c.push(ss.split(',')[0].trim().split(' ')[0]);}\n"
+            + "      for(var j=0;j<c.length;j++){\n"
+            + "        if(c[j]&&c[j].indexOf('data:')!==0&&!/spacer|blank|pixel/i.test(c[j])) return abs(c[j]);\n"
+            + "      }\n"
+            + "    }\n"
+            + "    var els=card.querySelectorAll('[style*=\"background\"],[class*=\"thumb\"]');\n"
+            + "    for(var k=0;k<els.length;k++){\n"
+            + "      var bg=(window.getComputedStyle(els[k]).backgroundImage||'')+' '+(els[k].getAttribute('style')||'');\n"
+            + "      var mm=/url\\([\"']?([^\"')]+)[\"']?\\)/.exec(bg);\n"
+            + "      if(mm&&mm[1].indexOf('data:')!==0) return abs(mm[1]);\n"
+            + "    }\n"
+            + "    return '';\n"
+            + "  }\n"
+            + "  function titleOf(it){\n"
+            + "    var card=it.card;\n"
+            + "    var t=text(card.querySelector('h1,h2,h3,h4,h5'));\n"
+            + "    if(!t){var x=card.querySelector('[class*=\"title\"]:not([class*=\"channel\"])'); t=text(x);}\n"
+            + "    if(!t){t=(it.a.getAttribute('title')||'').trim();}\n"
+            + "    if(!t){var im=card.querySelector('img[alt]'); t=im?(im.getAttribute('alt')||'').trim():'';}\n"
+            + "    if(!t){t=text(it.a);}\n"
+            + "    return t;\n"
+            + "  }\n"
+            + "  var list=items.map(function(it){\n"
+            + "    var card=it.card, chId='', chName='';\n"
+            + "    var ch=card.querySelector('a[href^=\"/c/\"],a[href^=\"/user/\"],a[href*=\"rumble.com/c/\"],a[href*=\"rumble.com/user/\"]');\n"
+            + "    if(ch){\n"
+            + "      var mm=/\\/(c|user)\\/([^\\/?#]+)/.exec(ch.getAttribute('href')||'');\n"
+            + "      if(mm){chId=mm[1]+'/'+mm[2]; chName=text(card.querySelector('[class*=\"channel__name\"],[class*=\"channel-name\"]'))||text(ch)||mm[2];}\n"
+            + "    }\n"
+            + "    var dur=0, dm=/(?:(\\d+):)?(\\d+):(\\d{2})/.exec(text(card.querySelector('[class*=\"duration\"]')));\n"
+            + "    if(dm){dur=(parseInt(dm[1]||'0',10)*60+parseInt(dm[2],10))*60+parseInt(dm[3],10);}\n"
+            + "    var tm=card.querySelector('time[datetime]');\n"
+            + "    return {id:it.id,slug:it.slug,title:titleOf(it),thumb:imgUrl(card),channelId:chId,channelName:chName,duration:dur,pub:tm?tm.getAttribute('datetime'):''};\n"
+            + "  });\n"
+            + "  try{window.scrollTo(0,document.body.scrollHeight);}catch(e){}\n"
+            + "  var stable=(w.__pn===list.length); w.__pn=list.length;\n"
+            + "  if((stable&&w.__pa>=3)||w.__pa>=9) return JSON.stringify(list);\n"
+            + "  return '';\n"
+            + "})()\n";
+
     /** Runs inside the embed page: lists the media urls the page's player has loaded. Returns "" until there is one. */
     private static final String PLAYER_SCRIPT = "(function(){var o={src:'',urls:[],title:document.title||'',image:''};"
             + "var v=document.querySelector('video');"
@@ -33,11 +116,45 @@ public final class RumbleApi {
      * Videos listed on a Rumble page (browse, category, channel or search). Page numbers start from 1.
      */
     public static List<RumbleParser.Entry> listing(String path, int page) throws IOException {
-        if (page > 1) {
-            path += (path.contains("?") ? "&" : "?") + "page=" + page;
+        String key = path + "#" + page;
+        Object[] cached = CACHE.get(key);
+
+        if (cached != null && System.currentTimeMillis() - (Long) cached[0] < CACHE_MS) {
+            return (List<RumbleParser.Entry>) cached[1];
         }
 
-        String html = RumbleHttp.get(path, SITE + "/", false);
+        List<RumbleParser.Entry> entries;
+
+        try { // the page as a browser shows it: Rumble fills its lists with scripts
+            entries = renderedListing(path, page);
+
+            if (entries.isEmpty() && page == 1) {
+                RumbleDebug.emptyRendered(path);
+            }
+        } catch (IOException renderError) { // no browser available: read the plain page instead
+            entries = plainListing(path, page);
+        }
+
+        if (!entries.isEmpty()) {
+            CACHE.put(key, new Object[]{System.currentTimeMillis(), entries});
+        }
+
+        return entries;
+    }
+
+    private static final long CACHE_MS = 10 * 60 * 1000;
+    private static final java.util.Map<String, Object[]> CACHE = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private static String pagedPath(String path, int page) {
+        return page > 1 ? path + (path.contains("?") ? "&" : "?") + "page=" + page : path;
+    }
+
+    private static List<RumbleParser.Entry> renderedListing(String path, int page) throws IOException {
+        return RumbleParser.parseRendered(BrowserFetcher.scrape(SITE + pagedPath(path, page), EXTRACT_SCRIPT, 22));
+    }
+
+    private static List<RumbleParser.Entry> plainListing(String path, int page) throws IOException {
+        String html = RumbleHttp.get(pagedPath(path, page), SITE + "/", false);
         List<RumbleParser.Entry> entries = RumbleParser.parseListing(html);
 
         if (entries.isEmpty() && page == 1) {
@@ -122,11 +239,11 @@ public final class RumbleApi {
      * Like {@link #listing} but always through the hidden browser, so the signed-in session cookies are sent.
      */
     public static List<RumbleParser.Entry> listingSignedIn(String path, int page) throws IOException {
-        if (page > 1) {
-            path += (path.contains("?") ? "&" : "?") + "page=" + page;
+        try {
+            return renderedListing(path, page); // the hidden browser holds the login cookies
+        } catch (IOException e) {
+            return RumbleParser.parseListing(RumbleHttp.getWithSession(pagedPath(path, page)));
         }
-
-        return RumbleParser.parseListing(RumbleHttp.getWithSession(path));
     }
 
     /**
