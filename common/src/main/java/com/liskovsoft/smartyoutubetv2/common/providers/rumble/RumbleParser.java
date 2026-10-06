@@ -40,6 +40,9 @@ public final class RumbleParser {
     private static final Pattern EMBED_ID = Pattern.compile("rumble\\.com(?:\\\\?/|%2F)embed(?:\\\\?/|%2F)(?:[0-9a-z]+\\.)?([0-9a-z]+)", Pattern.CASE_INSENSITIVE);
     private static final Pattern PAGE_TITLE = Pattern.compile("<title>(.*?)</title>", Pattern.DOTALL);
 
+    /** Tallest picture picked from a list of mp4 files. */
+    static final int MAX_HEIGHT = 1080;
+
     private RumbleParser() {
     }
 
@@ -77,8 +80,24 @@ public final class RumbleParser {
         public long durationSec;
         public long publishedMs;
         public boolean live;
-        public String mp4Url; // best mp4 not above 1080p
+        public String mp4Url;  // best mp4 up to MAX_HEIGHT
+        public int mp4Height;  // 0 when unknown
         public String hlsUrl;
+        public String webmUrl; // last resort
+        public int webmHeight;
+
+        /** Which stream the app plays, in words. Shown in the video description to help diagnose playback problems. */
+        public String describeChoice() {
+            if (mp4Url != null) {
+                return "MP4 " + (mp4Height > 0 ? mp4Height + "p" : "(size unknown)");
+            }
+
+            if (hlsUrl != null) {
+                return "HLS (adaptive)";
+            }
+
+            return webmUrl != null ? "WebM " + (webmHeight > 0 ? webmHeight + "p" : "(size unknown)") : "none";
+        }
 
         public ProviderMediaItem toMediaItem(String videoId) {
             ProviderMediaItem item = ProviderMediaItem.video(videoId);
@@ -299,15 +318,17 @@ public final class RumbleParser {
 
             JSONObject ua = root.optJSONObject("ua"); // is an empty array when nothing can be played
             if (ua != null) {
-                stream.mp4Url = bestUrl(ua.optJSONObject("mp4"));
-
-                if (stream.mp4Url == null) {
-                    stream.mp4Url = bestUrl(ua.optJSONObject("webm"));
-                }
+                Object[] mp4 = bestVariant(ua.optJSONObject("mp4"));
+                Object[] webm = bestVariant(ua.optJSONObject("webm"));
+                stream.mp4Url = mp4 != null ? (String) mp4[1] : null;
+                stream.mp4Height = mp4 != null ? (Integer) mp4[0] : 0;
+                stream.webmUrl = webm != null ? (String) webm[1] : null;
+                stream.webmHeight = webm != null ? (Integer) webm[0] : 0;
 
                 JSONObject hls = ua.optJSONObject("hls");
                 if (hls != null) {
-                    stream.hlsUrl = bestUrl(hls);
+                    Object[] auto = bestVariant(hls);
+                    stream.hlsUrl = auto != null ? (String) auto[1] : null;
                 }
             }
 
@@ -315,10 +336,8 @@ public final class RumbleParser {
                 MediaScan scan = new MediaScan();
                 scan.visit(null, root);
                 stream.mp4Url = scan.best(scan.mp4);
+                stream.webmUrl = scan.best(scan.webm);
 
-                if (stream.mp4Url == null) {
-                    stream.mp4Url = scan.best(scan.webm);
-                }
                 if (stream.hlsUrl == null) {
                     stream.hlsUrl = scan.hls;
                 }
@@ -350,7 +369,8 @@ public final class RumbleParser {
                 scan.add(null, 0, urls.optString(i, ""));
             }
 
-            stream.mp4Url = scan.mp4.isEmpty() ? scan.best(scan.webm) : (String) scan.mp4.get(0)[1];
+            stream.mp4Url = scan.mp4.isEmpty() ? null : (String) scan.mp4.get(0)[1];
+            stream.webmUrl = scan.best(scan.webm);
             stream.hlsUrl = scan.hls;
             stream.title = textOf(root.optString("title", null));
 
@@ -359,7 +379,7 @@ public final class RumbleParser {
             }
 
             stream.thumb = root.isNull("image") || root.optString("image", "").isEmpty() ? null : root.optString("image");
-            return stream.mp4Url != null || stream.hlsUrl != null ? stream : null;
+            return stream.mp4Url != null || stream.hlsUrl != null || stream.webmUrl != null ? stream : null;
         } catch (Exception e) {
             return null;
         }
@@ -426,31 +446,47 @@ public final class RumbleParser {
         String best(List<Object[]> list) {
             String best = null;
             int bestHeight = -1;
+            String lowestAbove = null;
+            int lowestAboveHeight = Integer.MAX_VALUE;
 
             for (Object[] entry : list) {
                 int h = (Integer) entry[0];
 
-                if (h <= 1080 && h > bestHeight) {
+                if (h > 0 && h <= MAX_HEIGHT && h > bestHeight) {
                     bestHeight = h;
                     best = (String) entry[1];
+                } else if (h > MAX_HEIGHT && h < lowestAboveHeight) {
+                    lowestAboveHeight = h;
+                    lowestAbove = (String) entry[1];
                 }
             }
 
-            return best != null ? best : (list.isEmpty() ? null : (String) list.get(0)[1]);
+            if (best != null) {
+                return best;
+            }
+
+            if (lowestAbove != null) {
+                return lowestAbove;
+            }
+
+            return list.isEmpty() ? null : (String) list.get(0)[1];
         }
     }
 
     /**
      * Picks the highest resolution up to 1080p from {"720": {"url": ...}, "480": {...}} (keys are heights or names).
      */
-    private static String bestUrl(JSONObject variants) {
+    private static Object[] bestVariant(JSONObject variants) {
         if (variants == null) {
             return null;
         }
 
         String best = null;
         int bestHeight = -1;
+        String lowestAbove = null;
+        int lowestAboveHeight = Integer.MAX_VALUE;
         String anyUrl = null;
+        int anyHeight = 0;
         Iterator<String> keys = variants.keys();
 
         while (keys.hasNext()) {
@@ -475,13 +511,24 @@ public final class RumbleParser {
                 height = parseInt(key);
             }
 
-            if (height <= 1080 && height > bestHeight) {
+            if (height > 0 && height <= MAX_HEIGHT && height > bestHeight) {
                 bestHeight = height;
                 best = url;
+            } else if (height > MAX_HEIGHT && (lowestAbove == null || height < lowestAboveHeight)) {
+                lowestAbove = url;
+                lowestAboveHeight = height;
             }
         }
 
-        return best != null ? best : anyUrl;
+        if (best != null) {
+            return new Object[]{bestHeight, best};
+        }
+
+        if (lowestAbove != null) {
+            return new Object[]{lowestAboveHeight, lowestAbove};
+        }
+
+        return anyUrl != null ? new Object[]{anyHeight, anyUrl} : null;
     }
 
     // Helpers

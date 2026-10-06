@@ -37,7 +37,14 @@ public final class RumbleApi {
             path += (path.contains("?") ? "&" : "?") + "page=" + page;
         }
 
-        return RumbleParser.parseListing(RumbleHttp.get(path, SITE + "/", false));
+        String html = RumbleHttp.get(path, SITE + "/", false);
+        List<RumbleParser.Entry> entries = RumbleParser.parseListing(html);
+
+        if (entries.isEmpty() && page == 1) {
+            RumbleDebug.emptyListing(path, html);
+        }
+
+        return entries;
     }
 
     public static String browsePath(String sort, String date) {
@@ -85,7 +92,7 @@ public final class RumbleApi {
                 String json = RumbleHttp.get("/embedJS/" + version + "/?request=video&ver=2&v=" + encode(embedId), SITE + "/embed/" + embedId + "/", true);
                 RumbleParser.Stream stream = RumbleParser.parseEmbed(json);
 
-                if (stream != null && (stream.mp4Url != null || stream.hlsUrl != null)) {
+                if (stream != null && (stream.mp4Url != null || stream.hlsUrl != null || stream.webmUrl != null)) {
                     return stream;
                 }
 

@@ -16,15 +16,17 @@ final class RumbleHttp {
     static final String ORIGIN = "https://rumble.com";
     private static final String DESKTOP_UA =
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
-    private static volatile boolean sBrowserOnly;
+    private static volatile long sDirectBlockedUntil;
 
     private RumbleHttp() {
     }
 
     static String get(String path, String referer, boolean json) throws IOException {
         String url = ORIGIN + path;
+        boolean directFirst = System.currentTimeMillis() >= sDirectBlockedUntil;
+        IOException directError = null;
 
-        if (!sBrowserOnly) {
+        if (directFirst) {
             try {
                 String body = ProviderHttp.get(url, headers(referer, json));
 
@@ -32,17 +34,41 @@ final class RumbleHttp {
                     return body;
                 }
 
-                sBrowserOnly = true; // answered 200 but with a check page instead of the data
+                directError = new IOException("bot-check page instead of data");
+                blockDirect();
             } catch (HttpStatusException e) {
-                if (e.code != 403 && e.code != 429 && e.code != 503) {
-                    throw e;
-                }
+                directError = e;
 
-                sBrowserOnly = true;
+                if (e.code == 403 || e.code == 429 || e.code == 503) {
+                    blockDirect();
+                }
+            } catch (IOException e) {
+                directError = e;
             }
         }
 
-        return BrowserFetcher.fetch(ORIGIN, url);
+        try {
+            return BrowserFetcher.fetch(ORIGIN, url);
+        } catch (IOException browserError) {
+            if (!directFirst) { // the browser failed while plain requests were being skipped: give them another go
+                try {
+                    String body = ProviderHttp.get(url, headers(referer, json));
+
+                    if (!isBlockPage(body, json)) {
+                        return body;
+                    }
+                } catch (IOException ignored) {
+                    // report the browser error below
+                }
+            }
+
+            throw directError != null ? new IOException(directError.getMessage() + "; browser: " + browserError.getMessage()) : browserError;
+        }
+    }
+
+    /** Skip plain requests for a while after Rumble refused one. Retried later in case the block was temporary. */
+    private static void blockDirect() {
+        sDirectBlockedUntil = System.currentTimeMillis() + 10 * 60 * 1000;
     }
 
     /**
@@ -52,12 +78,13 @@ final class RumbleHttp {
         String text = body == null ? "" : body.trim();
 
         if (json) {
-            return !(text.startsWith("{") || text.startsWith("["));
+            return text.startsWith("<"); // data answers are JSON (even a bare "false"); HTML is a check or error page
         }
 
+        // Note: "/cdn-cgi/challenge-platform/" also appears on normal pages, so it is not a sign of a block
         String head = (text.length() > 4000 ? text.substring(0, 4000) : text).toLowerCase(java.util.Locale.US);
-        return head.contains("just a moment") || head.contains("cf-chl") || head.contains("challenge-platform")
-                || head.contains("enable javascript and cookies");
+        return head.contains("just a moment") || head.contains("cf-chl-") || head.contains("enable javascript and cookies")
+                || head.contains("<title>attention required");
     }
 
     /**
