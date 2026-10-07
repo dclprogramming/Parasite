@@ -54,6 +54,7 @@ public final class RumbleParser {
         public String thumb;
         public String channelId; // "c/Name" or "user/Name"
         public String channelName;
+        public String channelThumb; // channel picture shown on the card
         public long durationSec;
         public long publishedMs;
 
@@ -217,6 +218,7 @@ public final class RumbleParser {
                 entry.thumb = blankToNull(card.optString("thumb", ""));
                 entry.channelId = blankToNull(card.optString("channelId", ""));
                 entry.channelName = blankToNull(card.optString("channelName", ""));
+                entry.channelThumb = blankToNull(card.optString("avatar", ""));
                 entry.durationSec = card.optLong("duration");
                 entry.publishedMs = parseIsoDate(blankToNull(card.optString("pub", "")));
                 result.add(entry);

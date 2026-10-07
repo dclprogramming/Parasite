@@ -73,6 +73,8 @@ public final class BrowserFetcher {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new IOException(e);
+            } finally {
+                MAIN.post(BrowserFetcher::park);
             }
 
             if (request.error != null) {
@@ -92,6 +94,13 @@ public final class BrowserFetcher {
      * string (or {@code maxWaitSec} passes). The script must return a string; "" means "not ready yet".
      */
     public static String scrape(String pageUrl, String script, int maxWaitSec) throws IOException {
+        return scrape(pageUrl, script, maxWaitSec, false);
+    }
+
+    /**
+     * @param autoplay let the page start video by itself (needed to read what a player loads; otherwise keep it off)
+     */
+    public static String scrape(String pageUrl, String script, int maxWaitSec, boolean autoplay) throws IOException {
         Context context = ProviderData.getAppContext();
 
         if (context == null) {
@@ -100,7 +109,7 @@ public final class BrowserFetcher {
 
         synchronized (LOCK) {
             Request request = new Request();
-            MAIN.post(() -> beginScrape(context, pageUrl, script, maxWaitSec, request));
+            MAIN.post(() -> beginScrape(context, pageUrl, script, maxWaitSec, autoplay, request));
 
             try {
                 if (!request.done.await(maxWaitSec + 15L, TimeUnit.SECONDS)) {
@@ -109,6 +118,8 @@ public final class BrowserFetcher {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new IOException(e);
+            } finally {
+                MAIN.post(BrowserFetcher::park); // stop whatever the page is doing (video, scripts) right away
             }
 
             if (request.error != null) {
@@ -121,10 +132,23 @@ public final class BrowserFetcher {
 
     // Main thread
 
-    private static void beginScrape(Context context, String pageUrl, String script, int maxWaitSec, Request request) {
+    /** Leaves the page: no video, timers or scripts keep running (and holding a decoder) between requests. */
+    private static void park() {
+        if (sWebView != null) {
+            sWebView.loadUrl("about:blank");
+            sWebView.onPause();
+        }
+
+        sClearedOrigin = null;
+        sPageLoaded = false;
+    }
+
+    private static void beginScrape(Context context, String pageUrl, String script, int maxWaitSec, boolean autoplay, Request request) {
         try {
             sCurrent = request;
             WebView view = webView(context);
+            view.onResume();
+            view.getSettings().setMediaPlaybackRequiresUserGesture(!autoplay);
             sPageLoaded = false;
             view.loadUrl(pageUrl);
             pollScrape(view, script, request, 0, maxWaitSec);
@@ -177,12 +201,14 @@ public final class BrowserFetcher {
         try {
             sCurrent = request;
             WebView view = webView(context);
+            view.onResume();
+            view.getSettings().setMediaPlaybackRequiresUserGesture(true);
 
             if (origin.equals(sClearedOrigin)) {
                 runFetch(view, url, request);
             } else {
                 sPageLoaded = false;
-                view.loadUrl(origin + "/");
+                view.loadUrl(origin + "/robots.txt"); // a tiny page of the site, enough for same-site requests
                 waitForBrowserCheck(view, origin, url, request, 0);
             }
         } catch (Throwable e) { // e.g. no WebView installed on this device
@@ -197,7 +223,7 @@ public final class BrowserFetcher {
             WebSettings settings = view.getSettings();
             settings.setJavaScriptEnabled(true);
             settings.setDomStorageEnabled(true);
-            settings.setMediaPlaybackRequiresUserGesture(false); // let embedded players start on their own
+            settings.setMediaPlaybackRequiresUserGesture(true); // pages must not start videos on their own: they would hold the TV's video decoder
             settings.setUserAgentString(settings.getUserAgentString().replace("; wv", "")); // look like plain Chrome
             view.addJavascriptInterface(new Bridge(), "ParasiteBridge");
             // Never shown, but pages lay out for a desktop-sized window and load everything inside it
@@ -207,7 +233,7 @@ public final class BrowserFetcher {
             view.setWebViewClient(new WebViewClient() {
                 @Override
                 public void onPageFinished(WebView v, String pageUrl) {
-                    sPageLoaded = true;
+                    sPageLoaded = pageUrl != null && !pageUrl.startsWith("about:"); // the parked blank page doesn't count
                 }
             });
             sWebView = view;

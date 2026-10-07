@@ -49,24 +49,46 @@ public final class RumbleApi {
             + "    items.push({id:id,slug:m[2],card:card,a:a});\n"
             + "  });\n"
             + "  if(!items.length){ return w.__pa>=8?'[]':''; }\n"
-            + "  function skipImg(im){return !!im.closest('address,[class*=\"channel\"],[class*=\"avatar\"],[class*=\"profile\"]');}\n"
+            + "  var AV='address,[class*=\"channel\"],[class*=\"avatar\"],[class*=\"profile\"]';\n"
+            + "  function usable(u){return !!u&&u.indexOf('data:')!==0&&!/spacer|blank|pixel|placeholder/i.test(u);}\n"
+            + "  function pick(im){\n"
+            + "    var c=[im.currentSrc,im.getAttribute('src'),im.getAttribute('data-src'),im.getAttribute('data-lazy-src'),im.getAttribute('data-original'),im.getAttribute('data-thumb'),im.getAttribute('data-image')];\n"
+            + "    var ss=im.getAttribute('srcset')||im.getAttribute('data-srcset');\n"
+            + "    if(ss){c.push(ss.split(',')[0].trim().split(' ')[0]);}\n"
+            + "    for(var j=0;j<c.length;j++){if(usable(c[j])) return abs(c[j]);}\n"
+            + "    return '';\n"
+            + "  }\n"
             + "  function imgUrl(card){\n"
             + "    var imgs=card.querySelectorAll('img');\n"
             + "    for(var i=0;i<imgs.length;i++){\n"
-            + "      var im=imgs[i]; if(skipImg(im)) continue;\n"
-            + "      var c=[im.currentSrc,im.getAttribute('src'),im.getAttribute('data-src'),im.getAttribute('data-lazy-src'),im.getAttribute('data-original')];\n"
-            + "      var ss=im.getAttribute('srcset')||im.getAttribute('data-srcset');\n"
-            + "      if(ss){c.push(ss.split(',')[0].trim().split(' ')[0]);}\n"
-            + "      for(var j=0;j<c.length;j++){\n"
-            + "        if(c[j]&&c[j].indexOf('data:')!==0&&!/spacer|blank|pixel/i.test(c[j])) return abs(c[j]);\n"
-            + "      }\n"
+            + "      if(imgs[i].closest(AV)) continue;\n"
+            + "      var u=pick(imgs[i]); if(u) return u;\n"
+            + "    }\n"
+            + "    var srcs=card.querySelectorAll('source[srcset],source[data-srcset]');\n"
+            + "    for(var s=0;s<srcs.length;s++){\n"
+            + "      if(srcs[s].closest(AV)) continue;\n"
+            + "      var ss=(srcs[s].getAttribute('srcset')||srcs[s].getAttribute('data-srcset')||'').split(',')[0].trim().split(' ')[0];\n"
+            + "      if(usable(ss)) return abs(ss);\n"
+            + "    }\n"
+            + "    var vids=card.querySelectorAll('video[poster],[data-poster]');\n"
+            + "    for(var v=0;v<vids.length;v++){\n"
+            + "      var pu=vids[v].getAttribute('poster')||vids[v].getAttribute('data-poster');\n"
+            + "      if(usable(pu)) return abs(pu);\n"
             + "    }\n"
             + "    var els=card.querySelectorAll('[style*=\"background\"],[class*=\"thumb\"]');\n"
             + "    for(var k=0;k<els.length;k++){\n"
             + "      var bg=(window.getComputedStyle(els[k]).backgroundImage||'')+' '+(els[k].getAttribute('style')||'');\n"
             + "      var mm=/url\\([\"']?([^\"')]+)[\"']?\\)/.exec(bg);\n"
-            + "      if(mm&&mm[1].indexOf('data:')!==0) return abs(mm[1]);\n"
+            + "      if(mm&&usable(mm[1])) return abs(mm[1]);\n"
             + "    }\n"
+            + "    var copy=card.cloneNode(true);\n"
+            + "    [].forEach.call(copy.querySelectorAll(AV),function(n){if(n.parentNode) n.parentNode.removeChild(n);});\n"
+            + "    var raw=/https?:\\/\\/[^\\s\"'<>()]+\\.(?:jpe?g|png|webp)(?:\\?[^\\s\"'<>()]*)?/i.exec(copy.outerHTML||'');\n"
+            + "    return raw?raw[0]:'';\n"
+            + "  }\n"
+            + "  function avatarOf(card){\n"
+            + "    var imgs=card.querySelectorAll('address img,[class*=\"channel\"] img,[class*=\"avatar\"] img,img[class*=\"avatar\"]');\n"
+            + "    for(var i=0;i<imgs.length;i++){var u=pick(imgs[i]); if(u) return u;}\n"
             + "    return '';\n"
             + "  }\n"
             + "  function titleOf(it){\n"
@@ -88,7 +110,7 @@ public final class RumbleApi {
             + "    var dur=0, dm=/(?:(\\d+):)?(\\d+):(\\d{2})/.exec(text(card.querySelector('[class*=\"duration\"]')));\n"
             + "    if(dm){dur=(parseInt(dm[1]||'0',10)*60+parseInt(dm[2],10))*60+parseInt(dm[3],10);}\n"
             + "    var tm=card.querySelector('time[datetime]');\n"
-            + "    return {id:it.id,slug:it.slug,title:titleOf(it),thumb:imgUrl(card),channelId:chId,channelName:chName,duration:dur,pub:tm?tm.getAttribute('datetime'):''};\n"
+            + "    return {id:it.id,slug:it.slug,title:titleOf(it),thumb:imgUrl(card),channelId:chId,channelName:chName,avatar:avatarOf(card),duration:dur,pub:tm?tm.getAttribute('datetime'):''};\n"
             + "  });\n"
             + "  try{window.scrollTo(0,document.body.scrollHeight);}catch(e){}\n"
             + "  var stable=(w.__pn===list.length); w.__pn=list.length;\n"
@@ -135,11 +157,24 @@ public final class RumbleApi {
             entries = plainListing(path, page);
         }
 
+        for (RumbleParser.Entry entry : entries) { // remember channel pictures for the channel lists
+            if (entry.channelId != null && entry.channelThumb != null) {
+                CHANNEL_THUMBS.put(entry.channelId, entry.channelThumb);
+            }
+        }
+
         if (!entries.isEmpty()) {
             CACHE.put(key, new Object[]{System.currentTimeMillis(), entries});
         }
 
         return entries;
+    }
+
+    private static final java.util.Map<String, String> CHANNEL_THUMBS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Channel picture seen on any page so far, or null. */
+    public static String knownChannelThumb(String channelId) {
+        return channelId != null ? CHANNEL_THUMBS.get(channelId) : null;
     }
 
     private static final long CACHE_MS = 10 * 60 * 1000;
@@ -150,7 +185,7 @@ public final class RumbleApi {
     }
 
     private static List<RumbleParser.Entry> renderedListing(String path, int page) throws IOException {
-        return RumbleParser.parseRendered(BrowserFetcher.scrape(SITE + pagedPath(path, page), EXTRACT_SCRIPT, 22));
+        return RumbleParser.parseRendered(BrowserFetcher.scrape(SITE + pagedPath(path, page), EXTRACT_SCRIPT, 22, false));
     }
 
     private static List<RumbleParser.Entry> plainListing(String path, int page) throws IOException {
@@ -221,7 +256,7 @@ public final class RumbleApi {
 
         // The API refused us: let the embed page's own player fetch the stream, and read it from there
         try {
-            RumbleParser.Stream stream = RumbleParser.parseScrape(BrowserFetcher.scrape(SITE + "/embed/" + embedId + "/", PLAYER_SCRIPT, 25));
+            RumbleParser.Stream stream = RumbleParser.parseScrape(BrowserFetcher.scrape(SITE + "/embed/" + embedId + "/", PLAYER_SCRIPT, 25, true));
 
             if (stream != null) {
                 return stream;
@@ -239,11 +274,21 @@ public final class RumbleApi {
      * Like {@link #listing} but always through the hidden browser, so the signed-in session cookies are sent.
      */
     public static List<RumbleParser.Entry> listingSignedIn(String path, int page) throws IOException {
+        List<RumbleParser.Entry> entries;
+
         try {
-            return renderedListing(path, page); // the hidden browser holds the login cookies
+            entries = renderedListing(path, page); // the hidden browser holds the login cookies
         } catch (IOException e) {
-            return RumbleParser.parseListing(RumbleHttp.getWithSession(pagedPath(path, page)));
+            entries = RumbleParser.parseListing(RumbleHttp.getWithSession(pagedPath(path, page)));
         }
+
+        for (RumbleParser.Entry entry : entries) {
+            if (entry.channelId != null && entry.channelThumb != null) {
+                CHANNEL_THUMBS.put(entry.channelId, entry.channelThumb);
+            }
+        }
+
+        return entries;
     }
 
     /**

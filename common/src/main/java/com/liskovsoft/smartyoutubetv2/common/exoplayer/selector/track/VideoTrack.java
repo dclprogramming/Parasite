@@ -259,7 +259,7 @@ public class VideoTrack extends MediaTrack {
         }
 
         int result = leftScore - rightScore;
-        return result == 0 && TrackSelectorUtil.codecNameShort(codecs1).equals(TrackSelectorUtil.codecNameShort(codecs2)) ? bitrate1 - bitrate2 : result;
+        return result == 0 && Helpers.equals(TrackSelectorUtil.codecNameShort(codecs1), TrackSelectorUtil.codecNameShort(codecs2)) ? bitrate1 - bitrate2 : result;
     }
 
     //private int compare(String id1, String id2, int size1, int size2, float frameRate1, float frameRate2, String codecs1, String codecs2) {

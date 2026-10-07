@@ -54,6 +54,23 @@ public class ProviderStore {
         writeItems("channels", items, Integer.MAX_VALUE);
     }
 
+    /** Replaces a followed channel's saved details (e.g. once its picture is known). Keeps the list order. */
+    public synchronized void updateChannel(ProviderMediaItem channel) {
+        if (channel == null || channel.channelId == null) {
+            return;
+        }
+
+        List<ProviderMediaItem> items = getChannels();
+
+        for (int i = 0; i < items.size(); i++) {
+            if (channel.channelId.equals(items.get(i).channelId)) {
+                items.set(i, channel);
+                writeItems("channels", items, Integer.MAX_VALUE);
+                return;
+            }
+        }
+    }
+
     public synchronized void unfollow(String channelId) {
         List<ProviderMediaItem> items = getChannels();
         List<ProviderMediaItem> result = new ArrayList<>();

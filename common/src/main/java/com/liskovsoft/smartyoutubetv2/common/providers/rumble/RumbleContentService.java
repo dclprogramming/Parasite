@@ -164,6 +164,7 @@ public class RumbleContentService extends LocalContentBase {
     @Override
     protected MediaGroup channelsGroup(boolean sortByName) {
         ProviderMediaGroup group = (ProviderMediaGroup) super.channelsGroup(sortByName);
+        fillKnownPictures(group);
 
         if (isSignedIn()) { // add the channels seen in the account's subscription feed
             try {
@@ -175,7 +176,7 @@ public class RumbleContentService extends LocalContentBase {
 
                 for (RumbleParser.Entry entry : RumbleApi.listingSignedIn("/subscriptions", 1)) {
                     if (entry.channelId != null && known.add(entry.channelId)) {
-                        group.add(ProviderMediaItem.channel(entry.channelId, entry.channelName, null));
+                        group.add(ProviderMediaItem.channel(entry.channelId, entry.channelName, entry.channelThumb));
                     }
                 }
             } catch (IOException e) {
@@ -183,7 +184,69 @@ public class RumbleContentService extends LocalContentBase {
             }
         }
 
+        fillKnownPictures(group);
+        loadMissingPictures(group);
         return group;
+    }
+
+    /** Channel pictures seen on pages earlier. */
+    private void fillKnownPictures(ProviderMediaGroup group) {
+        for (MediaItem item : group.getMediaItems()) {
+            ProviderMediaItem channel = (ProviderMediaItem) item;
+
+            if (channel.cardImageUrl == null) {
+                String thumb = RumbleApi.knownChannelThumb(channel.channelId);
+
+                if (thumb != null) {
+                    channel.cardImageUrl = thumb;
+                    channel.backgroundImageUrl = thumb;
+                }
+            }
+        }
+    }
+
+    private static boolean sLoadingPictures;
+
+    /**
+     * Fetches pictures of followed channels that still have none, in the background (a few per run).
+     * They show up next time the list is opened, and are saved with the follow.
+     */
+    private void loadMissingPictures(ProviderMediaGroup group) {
+        List<String> missing = new ArrayList<>();
+
+        for (MediaItem item : group.getMediaItems()) {
+            if (item.getCardImageUrl() == null && item.getChannelId() != null && missing.size() < 10) {
+                missing.add(item.getChannelId());
+            }
+        }
+
+        synchronized (RumbleContentService.class) {
+            if (missing.isEmpty() || sLoadingPictures) {
+                return;
+            }
+
+            sLoadingPictures = true;
+        }
+
+        new Thread(() -> {
+            try {
+                for (String channelId : missing) {
+                    try {
+                        ProviderMediaItem info = RumbleApi.channelInfo(channelId);
+
+                        if (info.cardImageUrl != null) {
+                            mStore.updateChannel(info);
+                        }
+                    } catch (IOException e) {
+                        // Next time
+                    }
+                }
+            } finally {
+                synchronized (RumbleContentService.class) {
+                    sLoadingPictures = false;
+                }
+            }
+        }).start();
     }
 
     /**
