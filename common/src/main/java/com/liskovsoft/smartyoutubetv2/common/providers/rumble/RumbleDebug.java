@@ -67,20 +67,24 @@ final class RumbleDebug {
         for (int i = 0; i < count; i++) {
             RumbleParser.Entry entry = entries.get(i);
             RumbleParser.Oembed exact = RumbleApi.oembedFor(entry.stem != null ? entry.stem : entry.id);
-            boolean titleMatches = exact == null || exact.title == null || similar(entry.title, exact.title);
+            boolean titleMatches = exact == null || exact.title == null || RumbleParser.titlesMatch(entry.title, exact.title);
+            boolean titleGuessed = "slug".equals(entry.titleSource);
             String thumbHost = com.liskovsoft.smartyoutubetv2.common.providers.HostCheck.hostOf(entry.thumb);
             boolean thumbResolves = entry.thumb == null || com.liskovsoft.smartyoutubetv2.common.providers.HostCheck.resolves(entry.thumb);
 
             text.append("Card ").append(i + 1).append(": id ").append(entry.stem).append("\n");
-            text.append("  card title: ").append(entry.title).append("\n");
+            text.append("  card title: ").append(entry.title).append("  (from ").append(entry.titleSource).append(entry.tag != null ? ", <" + entry.tag + ">" : "").append(")\n");
             text.append("  Rumble says: ").append(exact == null ? "(no answer)" : exact.title).append(titleMatches ? "  [match]" : "  [MISMATCH]").append("\n");
             text.append("  picture: ").append(entry.thumb == null ? "NONE FOUND" : thumbHost + (thumbResolves ? " (reachable)" : " (CANNOT BE LOOKED UP - DNS)")).append("\n");
 
-            if (!titleMatches || entry.thumb == null || !thumbResolves) {
+            if (!titleMatches || titleGuessed || entry.thumb == null || !thumbResolves) {
                 problem = true;
 
                 if (entry.html != null) {
                     text.append("  markup: ").append(entry.html.length() > 420 ? entry.html.substring(0, 420) : entry.html).append("\n");
+                }
+                if (entry.shadow != null) {
+                    text.append("  inside: ").append(entry.shadow.length() > 300 ? entry.shadow.substring(0, 300) : entry.shadow).append("\n");
                 }
             }
 
@@ -100,23 +104,6 @@ final class RumbleDebug {
         }
 
         show("Rumble check (photograph this screen)", text.toString());
-    }
-
-    private static boolean similar(String a, String b) {
-        String na = normalize(a);
-        String nb = normalize(b);
-
-        if (na.isEmpty() || nb.isEmpty()) {
-            return true;
-        }
-
-        String headA = na.substring(0, Math.min(16, na.length()));
-        String headB = nb.substring(0, Math.min(16, nb.length()));
-        return nb.contains(headA) || na.contains(headB);
-    }
-
-    private static String normalize(String text) {
-        return text == null ? "" : text.toLowerCase(java.util.Locale.US).replaceAll("[^a-z0-9]", "");
     }
 
     private static void show(String title, String text) {

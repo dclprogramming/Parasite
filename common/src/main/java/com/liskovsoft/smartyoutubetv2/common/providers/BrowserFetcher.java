@@ -34,7 +34,10 @@ public final class BrowserFetcher {
     private static boolean sPageLoaded;
     private static Request sCurrent;
 
+    private static final java.util.concurrent.atomic.AtomicInteger NEXT_ID = new java.util.concurrent.atomic.AtomicInteger();
+
     private static class Request {
+        final int id = NEXT_ID.incrementAndGet(); // late answers of an abandoned request must not finish a newer one
         final CountDownLatch done = new CountDownLatch(1);
         volatile int status;
         volatile String body;
@@ -280,29 +283,29 @@ public final class BrowserFetcher {
 
     private static void runFetch(WebView view, String url, Request request) {
         String script = "(function(){fetch(" + JSONObject.quote(url) + ",{credentials:'include'})"
-                + ".then(function(r){return r.text().then(function(t){ParasiteBridge.done(r.status,t);});})"
-                + ".catch(function(e){ParasiteBridge.fail(String(e));});})();";
+                + ".then(function(r){return r.text().then(function(t){ParasiteBridge.done(" + request.id + ",r.status,t);});})"
+                + ".catch(function(e){ParasiteBridge.fail(" + request.id + ",String(e));});})();";
         view.evaluateJavascript(script, null);
     }
 
     /** Called from the page (a background thread). */
     public static class Bridge {
         @JavascriptInterface
-        public void done(int status, String body) {
+        public void done(int id, int status, String body) {
             Request request = sCurrent;
 
             Log.d(TAG, "fetch finished, status " + status);
 
-            if (request != null) {
+            if (request != null && request.id == id) {
                 request.finish(status, body, null);
             }
         }
 
         @JavascriptInterface
-        public void fail(String message) {
+        public void fail(int id, String message) {
             Request request = sCurrent;
 
-            if (request != null) {
+            if (request != null && request.id == id) {
                 request.finish(0, null, "Browser fetch failed: " + message);
             }
         }

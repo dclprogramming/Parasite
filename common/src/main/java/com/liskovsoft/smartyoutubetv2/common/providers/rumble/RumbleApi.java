@@ -22,35 +22,19 @@ public final class RumbleApi {
             + "  var w=window; w.__pa=(w.__pa||0)+1;\n"
             + "  if(/just a moment|attention required/i.test(document.title||'')) return '';\n"
             + "  var VID=/\\/(v[0-9a-z]{3,12})-([^\\/?#\"']*)\\.html/i;\n"
+            + "  var SKIP='header,nav,aside,footer,[class*=\"sidebar\"],[class*=\"side-bar\"]';\n"
             + "  function abs(u){try{return new URL(u,location.href).href;}catch(e){return u||'';}}\n"
             + "  function text(el){return el?(el.textContent||'').replace(/\\s+/g,' ').trim():'';}\n"
-            + "  var root=document.querySelector('main')||document.querySelector('#main')||document.body;\n"
-            + "  function collect(strict){\n"
-            + "    var out=[];\n"
-            + "    [].forEach.call(root.querySelectorAll('a[href]'),function(a){\n"
-            + "      if(!VID.test(a.getAttribute('href')||'')) return;\n"
-            + "      if(strict&&a.closest('header,nav,aside,footer,[class*=\"sidebar\"],[class*=\"side-bar\"]')) return;\n"
-            + "      out.push(a);\n"
-            + "    });\n"
+            + "  function usable(u){return !!u&&u.indexOf('data:')!==0&&!/spacer|blank|pixel|placeholder/i.test(u);}\n"
+            + "  function attr(el,names){for(var i=0;i<names.length;i++){var v=el.getAttribute(names[i]);if(v&&v.trim()) return v.trim();}return '';}\n"
+            + "  // light DOM plus open shadow roots\n"
+            + "  function deep(root,sel){\n"
+            + "    var out=[].slice.call(root.querySelectorAll(sel));\n"
+            + "    if(root.shadowRoot){out=out.concat(deep(root.shadowRoot,sel));}\n"
+            + "    [].forEach.call(root.querySelectorAll('*'),function(e){if(e.shadowRoot){out=out.concat(deep(e.shadowRoot,sel));}});\n"
             + "    return out;\n"
             + "  }\n"
-            + "  var anchors=collect(true); if(!anchors.length) anchors=collect(false);\n"
-            + "  var seen={}, items=[];\n"
-            + "  anchors.forEach(function(a){\n"
-            + "    var m=VID.exec(a.getAttribute('href')||''); var id=m[1];\n"
-            + "    if(seen[id]) return; seen[id]=1;\n"
-            + "    var card=a, el=a;\n"
-            + "    while(el.parentElement&&el.parentElement!==root&&el.parentElement!==document.body&&el.parentElement!==document.documentElement){\n"
-            + "      var p=el.parentElement, ids={}, n=0;\n"
-            + "      [].forEach.call(p.querySelectorAll('a[href]'),function(x){var mm=VID.exec(x.getAttribute('href')||'');if(mm&&!ids[mm[1]]){ids[mm[1]]=1;n++;}});\n"
-            + "      if(n>1) break;\n"
-            + "      card=p; el=p;\n"
-            + "    }\n"
-            + "    items.push({id:id,slug:m[2],card:card,a:a});\n"
-            + "  });\n"
-            + "  if(!items.length){ return w.__pa>=8?'[]':''; }\n"
             + "  var AV='address,[class*=\"channel\"],[class*=\"avatar\"],[class*=\"profile\"]';\n"
-            + "  function usable(u){return !!u&&u.indexOf('data:')!==0&&!/spacer|blank|pixel|placeholder/i.test(u);}\n"
             + "  function pick(im){\n"
             + "    var c=[im.currentSrc,im.getAttribute('src'),im.getAttribute('data-src'),im.getAttribute('data-lazy-src'),im.getAttribute('data-original'),im.getAttribute('data-thumb'),im.getAttribute('data-image')];\n"
             + "    var ss=im.getAttribute('srcset')||im.getAttribute('data-srcset');\n"
@@ -59,21 +43,21 @@ public final class RumbleApi {
             + "    return '';\n"
             + "  }\n"
             + "  function imgUrl(card){\n"
-            + "    var imgs=card.querySelectorAll('img');\n"
+            + "    var imgs=deep(card,'img');\n"
             + "    for(var i=0;i<imgs.length;i++){\n"
-            + "      if(imgs[i].closest(AV)) continue;\n"
+            + "      if(imgs[i].closest&&imgs[i].closest(AV)) continue;\n"
             + "      var u=pick(imgs[i]); if(u) return u;\n"
             + "    }\n"
-            + "    var srcs=card.querySelectorAll('source[srcset],source[data-srcset]');\n"
-            + "    for(var s=0;s<srcs.length;s++){\n"
-            + "      if(srcs[s].closest(AV)) continue;\n"
-            + "      var ss=(srcs[s].getAttribute('srcset')||srcs[s].getAttribute('data-srcset')||'').split(',')[0].trim().split(' ')[0];\n"
-            + "      if(usable(ss)) return abs(ss);\n"
-            + "    }\n"
-            + "    var vids=card.querySelectorAll('video[poster],[data-poster]');\n"
+            + "    var vids=deep(card,'video[poster],[data-poster]');\n"
             + "    for(var v=0;v<vids.length;v++){\n"
             + "      var pu=vids[v].getAttribute('poster')||vids[v].getAttribute('data-poster');\n"
             + "      if(usable(pu)) return abs(pu);\n"
+            + "    }\n"
+            + "    var srcs=deep(card,'source[srcset],source[data-srcset]');\n"
+            + "    for(var s=0;s<srcs.length;s++){\n"
+            + "      if(srcs[s].closest&&srcs[s].closest(AV)) continue;\n"
+            + "      var ss=(srcs[s].getAttribute('srcset')||srcs[s].getAttribute('data-srcset')||'').split(',')[0].trim().split(' ')[0];\n"
+            + "      if(usable(ss)) return abs(ss);\n"
             + "    }\n"
             + "    var els=card.querySelectorAll('[style*=\"background\"],[class*=\"thumb\"]');\n"
             + "    for(var k=0;k<els.length;k++){\n"
@@ -87,34 +71,101 @@ public final class RumbleApi {
             + "    return raw?raw[0]:'';\n"
             + "  }\n"
             + "  function avatarOf(card){\n"
-            + "    var imgs=card.querySelectorAll('address img,[class*=\"channel\"] img,[class*=\"avatar\"] img,img[class*=\"avatar\"]');\n"
+            + "    var imgs=deep(card,'address img,[class*=\"channel\"] img,[class*=\"avatar\"] img,img[class*=\"avatar\"]');\n"
             + "    for(var i=0;i<imgs.length;i++){var u=pick(imgs[i]); if(u) return u;}\n"
             + "    return '';\n"
             + "  }\n"
-            + "  function titleOf(it){\n"
-            + "    var card=it.card;\n"
-            + "    var t=text(card.querySelector('h1,h2,h3,h4,h5'));\n"
-            + "    if(!t){var x=card.querySelector('[class*=\"title\"]:not([class*=\"channel\"])'); t=text(x);}\n"
-            + "    if(!t){t=(it.a.getAttribute('title')||'').trim();}\n"
-            + "    if(!t){var im=card.querySelector('img[alt]'); t=im?(im.getAttribute('alt')||'').trim():'';}\n"
-            + "    if(!t){t=text(it.a);}\n"
-            + "    return t;\n"
+            + "  function channelLink(card){\n"
+            + "    var ch=deep(card,'a[href^=\"/c/\"],a[href^=\"/user/\"],a[href*=\"rumble.com/c/\"],a[href*=\"rumble.com/user/\"]')[0];\n"
+            + "    if(!ch) return null;\n"
+            + "    var mm=/\\/(c|user)\\/([^\\/?#]+)/.exec(ch.getAttribute('href')||'');\n"
+            + "    return mm?{id:mm[1]+'/'+mm[2],name:text(ch)||mm[2],el:ch}:null;\n"
             + "  }\n"
-            + "  var list=items.map(function(it,idx){\n"
-            + "    var card=it.card, chId='', chName='';\n"
-            + "    var ch=card.querySelector('a[href^=\"/c/\"],a[href^=\"/user/\"],a[href*=\"rumble.com/c/\"],a[href*=\"rumble.com/user/\"]');\n"
-            + "    if(ch){\n"
-            + "      var mm=/\\/(c|user)\\/([^\\/?#]+)/.exec(ch.getAttribute('href')||'');\n"
-            + "      if(mm){chId=mm[1]+'/'+mm[2]; chName=text(card.querySelector('[class*=\"channel__name\"],[class*=\"channel-name\"]'))||text(ch)||mm[2];}\n"
-            + "    }\n"
-            + "    var dur=0, dm=/(?:(\\d+):)?(\\d+):(\\d{2})/.exec(text(card.querySelector('[class*=\"duration\"]')));\n"
-            + "    if(dm){dur=(parseInt(dm[1]||'0',10)*60+parseInt(dm[2],10))*60+parseInt(dm[3],10);}\n"
-            + "    var tm=card.querySelector('time[datetime]');\n"
-            + "    return {id:it.id,slug:it.slug,title:titleOf(it),thumb:imgUrl(card),channelId:chId,channelName:chName,avatar:avatarOf(card),duration:dur,pub:tm?tm.getAttribute('datetime'):'',html:idx<3?(card.outerHTML||'').replace(/\\s+/g,' ').substring(0,1200):''};\n"
+            + "  function durationOf(card,raw){\n"
+            + "    if(raw!==undefined&&raw!==''&&/^\\d+$/.test(String(raw))) return parseInt(raw,10);\n"
+            + "    var dm=/(?:(\\d+):)?(\\d+):(\\d{2})/.exec(text(card.querySelector('[class*=\"duration\"]')));\n"
+            + "    return dm?(parseInt(dm[1]||'0',10)*60+parseInt(dm[2],10))*60+parseInt(dm[3],10):0;\n"
+            + "  }\n"
+            + "  var root=document.querySelector('main')||document.querySelector('#main')||document.body;\n"
+            + "  var list=[], seen={}, strategy='';\n"
+            + "\n"
+            + "  // 1) Rumble's own card element: <rum-video-thumbnail url=... src=... avatar=... name=... duration=... time=... hints=...>\n"
+            + "  var custom=[].slice.call(root.querySelectorAll('[url]')).filter(function(e){\n"
+            + "    return e.tagName.indexOf('-')>0&&VID.test(e.getAttribute('url')||'')&&!(e.closest&&e.closest(SKIP));\n"
             + "  });\n"
+            + "  if(!custom.length){\n"
+            + "    custom=[].slice.call(root.querySelectorAll('[url]')).filter(function(e){return e.tagName.indexOf('-')>0&&VID.test(e.getAttribute('url')||'');});\n"
+            + "  }\n"
+            + "  if(custom.length){\n"
+            + "    strategy='element';\n"
+            + "    custom.forEach(function(el){\n"
+            + "      var m=VID.exec(el.getAttribute('url')||''); var id=m[1];\n"
+            + "      if(seen[id]) return; seen[id]=1;\n"
+            + "      var ts='attr';\n"
+            + "      var title=attr(el,['title','video-title','data-title','aria-label']);\n"
+            + "      if(!title){var h=deep(el,'h1,h2,h3,h4,h5,[class*=\"title\"],[slot*=\"title\"]')[0]; title=text(h); ts='inner';}\n"
+            + "      if(!title){title=text(el); ts='text';}\n"
+            + "      var ch=channelLink(el);\n"
+            + "      var thumb=attr(el,['src','poster','thumbnail','image']);\n"
+            + "      thumb=usable(thumb)?abs(thumb):imgUrl(el);\n"
+            + "      var av=attr(el,['avatar']); av=usable(av)?abs(av):avatarOf(el);\n"
+            + "      var hints=(el.getAttribute('hints')||'').toLowerCase();\n"
+            + "      list.push({id:id,slug:m[2],title:title,ts:title?ts:'slug',thumb:thumb,channelId:ch?ch.id:'',channelName:attr(el,['name'])||(ch?ch.name:''),avatar:av,\n"
+            + "        duration:durationOf(el,el.getAttribute('duration')),pub:attr(el,['time','datetime']),live:hints.indexOf('live')>=0,tag:el.tagName.toLowerCase(),\n"
+            + "        html:list.length<3?(el.outerHTML||'').replace(/\\s+/g,' ').substring(0,700):'',\n"
+            + "        shadow:list.length<3?(el.shadowRoot?(el.shadowRoot.innerHTML||'').replace(/\\s+/g,' ').substring(0,500):'no shadow root'):''});\n"
+            + "    });\n"
+            + "  }\n"
+            + "\n"
+            + "  // 2) Plain links: find each video's card as the biggest block holding only that video\n"
+            + "  if(!list.length){\n"
+            + "    strategy='links';\n"
+            + "    var collect=function(strict){\n"
+            + "      return [].filter.call(root.querySelectorAll('a[href]'),function(a){\n"
+            + "        if(!VID.test(a.getAttribute('href')||'')) return false;\n"
+            + "        return !(strict&&a.closest(SKIP));\n"
+            + "      });\n"
+            + "    };\n"
+            + "    var anchors=collect(true); if(!anchors.length) anchors=collect(false);\n"
+            + "    var items=[];\n"
+            + "    anchors.forEach(function(a){\n"
+            + "      var m=VID.exec(a.getAttribute('href')||''); var id=m[1];\n"
+            + "      if(seen[id]) return; seen[id]=1;\n"
+            + "      var card=a, el=a;\n"
+            + "      while(el.parentElement&&el.parentElement!==root&&el.parentElement!==document.body&&el.parentElement!==document.documentElement){\n"
+            + "        var p=el.parentElement, ids={}, n=0;\n"
+            + "        [].forEach.call(p.querySelectorAll('a[href]'),function(x){var mm=VID.exec(x.getAttribute('href')||'');if(mm&&!ids[mm[1]]){ids[mm[1]]=1;n++;}});\n"
+            + "        if(n>1||p.querySelector('h1,h2')) break; // a section heading means the block is bigger than one card\n"
+            + "        card=p; el=p;\n"
+            + "      }\n"
+            + "      items.push({id:id,slug:m[2],card:card});\n"
+            + "    });\n"
+            + "    items.forEach(function(it,idx){\n"
+            + "      var card=it.card, ts='';\n"
+            + "      var title='';\n"
+            + "      // the video's own links first: text of a link to this video, or a heading inside one\n"
+            + "      var own=[].filter.call(card.querySelectorAll('a[href]'),function(x){var mm=VID.exec(x.getAttribute('href')||'');return mm&&mm[1]===it.id;});\n"
+            + "      for(var i=0;i<own.length&&!title;i++){\n"
+            + "        var hh=own[i].querySelector('h3,h4,h5,[class*=\"title\"]');\n"
+            + "        title=text(hh)||(own[i].getAttribute('title')||'').trim()||text(own[i]);\n"
+            + "        if(title) ts='link';\n"
+            + "      }\n"
+            + "      if(!title){title=text(card.querySelector('h3,h4,h5')); ts='heading';}\n"
+            + "      if(!title){title=text(card.querySelector('[class*=\"title\"]:not([class*=\"channel\"])')); ts='class';}\n"
+            + "      if(!title){var im=card.querySelector('img[alt]'); title=im?(im.getAttribute('alt')||'').trim():''; ts='alt';}\n"
+            + "      var ch=channelLink(card);\n"
+            + "      var tm=card.querySelector('time[datetime]');\n"
+            + "      list.push({id:it.id,slug:it.slug,title:title,ts:title?ts:'slug',thumb:imgUrl(card),channelId:ch?ch.id:'',channelName:ch?(text(card.querySelector('[class*=\"channel__name\"],[class*=\"channel-name\"]'))||ch.name):'',\n"
+            + "        avatar:avatarOf(card),duration:durationOf(card),pub:tm?tm.getAttribute('datetime'):'',live:false,tag:'',\n"
+            + "        html:idx<3?(card.outerHTML||'').replace(/\\s+/g,' ').substring(0,700):'',shadow:''});\n"
+            + "    });\n"
+            + "  }\n"
+            + "\n"
+            + "  if(!list.length){ return w.__pa>=8?'[]':''; }\n"
             + "  try{window.scrollTo(0,document.body.scrollHeight);}catch(e){}\n"
-            + "  var stable=(w.__pn===list.length); w.__pn=list.length;\n"
-            + "  if((stable&&w.__pa>=3)||w.__pa>=9) return JSON.stringify(list);\n"
+            + "  // wait until the list stops growing (more cards load while scrolling)\n"
+            + "  var same=(w.__pn===list.length); w.__ps=same?((w.__ps||0)+1):0; w.__pn=list.length;\n"
+            + "  if((w.__ps>=3&&w.__pa>=5)||w.__pa>=12) return JSON.stringify({strategy:strategy,cards:list});\n"
             + "  return '';\n"
             + "})()\n";
 
@@ -159,9 +210,13 @@ public final class RumbleApi {
             entries = plainListing(path, page);
         }
 
-        for (RumbleParser.Entry entry : entries) { // remember channel pictures for the channel lists
+        for (RumbleParser.Entry entry : entries) { // remember channel pictures and card titles
             if (entry.channelId != null && entry.channelThumb != null) {
                 CHANNEL_THUMBS.put(entry.channelId, entry.channelThumb);
+            }
+
+            if (entry.stem != null && entry.title != null && !"slug".equals(entry.titleSource)) {
+                TITLES.put(entry.stem, entry.title);
             }
         }
 
@@ -220,63 +275,8 @@ public final class RumbleApi {
         return "/search/video?q=" + encode(text);
     }
 
-    public static List<ProviderMediaItem> searchChannels(String text) throws IOException {
-        return RumbleParser.parseChannels(RumbleHttp.get("/search/channel?q=" + encode(text), SITE + "/", false));
-    }
-
     /**
-     * Name and picture of a channel, read from its page.
-     */
-    public static ProviderMediaItem channelInfo(String channelId) throws IOException {
-        return RumbleParser.parseChannelPage(channelId, RumbleHttp.get(channelPath(channelId), SITE + "/", false));
-    }
-
-    /**
-     * Metadata and stream urls of a video. {@code videoId} is the short embed id, e.g. "v7cwvbs".
-     */
-    public static RumbleParser.Stream stream(String videoId) throws IOException {
-        StringBuilder problems = new StringBuilder();
-        String embedId;
-
-        try {
-            embedId = embedIdOf(videoId);
-        } catch (IOException e) {
-            throw new IOException("watch page: " + e.getMessage());
-        }
-
-        for (String version : new String[]{"u4", "u3"}) {
-            try {
-                String json = RumbleHttp.get("/embedJS/" + version + "/?request=video&ver=2&v=" + encode(embedId), SITE + "/embed/" + embedId + "/", true);
-                RumbleParser.Stream stream = RumbleParser.parseEmbed(json);
-
-                if (stream != null && (stream.mp4Url != null || stream.hlsUrl != null || stream.webmUrl != null)) {
-                    return stream;
-                }
-
-                problems.append(version).append(": ").append(stream == null ? "not JSON (" + snippet(json) + ")" : "no stream in answer").append("; ");
-            } catch (IOException e) {
-                problems.append(version).append(": ").append(e.getMessage()).append("; ");
-            }
-        }
-
-        // The API refused us: let the embed page's own player fetch the stream, and read it from there
-        try {
-            RumbleParser.Stream stream = RumbleParser.parseScrape(BrowserFetcher.scrape(SITE + "/embed/" + embedId + "/", PLAYER_SCRIPT, 25, true));
-
-            if (stream != null) {
-                return stream;
-            }
-
-            problems.append("player: no stream found");
-        } catch (IOException e) {
-            problems.append("player: ").append(e.getMessage());
-        }
-
-        throw new IOException(problems.toString());
-    }
-
-    /**
-     * Like {@link #listing} but always through the hidden browser, so the signed-in session cookies are sent.
+     * Like {@link #listing} but through the hidden browser, so the signed-in session cookies are sent.
      */
     public static List<RumbleParser.Entry> listingSignedIn(String path, int page) throws IOException {
         List<RumbleParser.Entry> entries;
@@ -304,34 +304,162 @@ public final class RumbleApi {
         return html.contains("/logout") || html.contains("sign out") || html.contains("log out");
     }
 
-    private static final java.util.Map<String, String> EMBED_IDS = new java.util.concurrent.ConcurrentHashMap<>();
+    public static List<ProviderMediaItem> searchChannels(String text) throws IOException {
+        return RumbleParser.parseChannels(RumbleHttp.get("/search/channel?q=" + encode(text), SITE + "/", false));
+    }
 
     /**
-     * Rumble's player id of a video. {@code videoId} is the page name from the watch address ("v7cwvbs-some-title").
+     * Name and picture of a channel, read from its page.
      */
-    static String embedIdOf(String videoId) throws IOException {
-        String cached = EMBED_IDS.get(videoId);
+    public static ProviderMediaItem channelInfo(String channelId) throws IOException {
+        return RumbleParser.parseChannelPage(channelId, RumbleHttp.get(channelPath(channelId), SITE + "/", false));
+    }
+
+    /**
+     * Metadata and stream urls of a video. {@code videoId} is the page name from the watch address ("v7cwvbs-some-title").<br/>
+     * The player id is not in that name, so the watch page and oEmbed are asked for likely ids. Each answer is checked
+     * against the title the card showed, so a wrong guess never plays a different video unnoticed.
+     */
+    public static RumbleParser.Stream stream(String videoId) throws IOException {
+        List<String> ids = embedIdsOf(videoId);
+        StringBuilder problems = new StringBuilder();
+        RumbleParser.Stream firstFound = null;
+        String mismatch = null;
+
+        for (int i = 0; i < ids.size() && i < 3; i++) {
+            RumbleParser.Stream stream = streamOf(ids.get(i), i == 0, problems);
+
+            if (stream == null) {
+                continue;
+            }
+
+            if (firstFound == null) {
+                firstFound = stream;
+            }
+
+            if (titleAcceptable(videoId, stream)) {
+                return stream;
+            }
+
+            mismatch = "card says \"" + shorten(expectedTitle(videoId)) + "\" but player id " + ids.get(i) + " is \"" + shorten(stream.title) + "\"";
+            problems.append("id ").append(ids.get(i)).append(": other video; ");
+        }
+
+        if (firstFound != null) { // nothing matched: play the first, but say so in the details line
+            firstFound.stability = "(unverified: " + mismatch + ")";
+            return firstFound;
+        }
+
+        throw new IOException(problems.length() > 0 ? problems.toString() : "no player id found");
+    }
+
+    private static final java.util.Map<String, String> TITLES = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Title the card showed for this video (from a list), or from oEmbed. Null if unknown. */
+    private static String expectedTitle(String videoId) {
+        return TITLES.get(videoId);
+    }
+
+    private static boolean titleAcceptable(String videoId, RumbleParser.Stream stream) {
+        if (stream.title == null) {
+            return true; // nothing to compare
+        }
+
+        String card = TITLES.get(videoId);
+        RumbleParser.Oembed oembed = OEMBEDS.get(videoId);
+
+        boolean known = card != null || (oembed != null && oembed.title != null);
+        return !known || (card != null && RumbleParser.titlesMatch(card, stream.title))
+                || (oembed != null && oembed.title != null && RumbleParser.titlesMatch(oembed.title, stream.title));
+    }
+
+    private static String shorten(String text) {
+        return text == null ? "?" : (text.length() > 40 ? text.substring(0, 40) + "..." : text);
+    }
+
+    /** Stream details for one player id: the embed API, and for the first id also the page's own player as a fallback. */
+    private static RumbleParser.Stream streamOf(String embedId, boolean allowPagePlayer, StringBuilder problems) {
+        for (String version : new String[]{"u4", "u3"}) {
+            try {
+                String json = RumbleHttp.get("/embedJS/" + version + "/?request=video&ver=2&v=" + encode(embedId), SITE + "/embed/" + embedId + "/", true);
+                RumbleParser.Stream stream = RumbleParser.parseEmbed(json);
+
+                if (stream != null && (stream.mp4Url != null || stream.hlsUrl != null || stream.webmUrl != null || !stream.candidates.isEmpty())) {
+                    return stream;
+                }
+
+                problems.append(embedId).append(" ").append(version).append(": ").append(stream == null ? "not JSON (" + snippet(json) + ")" : "no stream in answer").append("; ");
+            } catch (IOException e) {
+                problems.append(embedId).append(" ").append(version).append(": ").append(e.getMessage()).append("; ");
+            }
+        }
+
+        if (!allowPagePlayer) {
+            return null;
+        }
+
+        // The API refused us: let the embed page's own player fetch the stream, and read it from there
+        try {
+            RumbleParser.Stream stream = RumbleParser.parseScrape(BrowserFetcher.scrape(SITE + "/embed/" + embedId + "/", PLAYER_SCRIPT, 25, true));
+
+            if (stream != null) {
+                return stream;
+            }
+
+            problems.append("player: no stream found; ");
+        } catch (IOException e) {
+            problems.append("player: ").append(e.getMessage()).append("; ");
+        }
+
+        return null;
+    }
+
+    private static final java.util.Map<String, String> EMBED_IDS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private static final java.util.Map<String, List<String>> EMBED_ID_LISTS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * Likely player ids of a video, best first: ids the watch page names for its own video, then oEmbed's answer, then
+     * other embed links on the page.
+     */
+    static List<String> embedIdsOf(String videoId) throws IOException {
+        List<String> cached = EMBED_ID_LISTS.get(videoId);
 
         if (cached != null) {
             return cached;
         }
 
+        List<String> ids = new java.util.ArrayList<>();
+        IOException pageError = null;
+        List<String> pageIds = new java.util.ArrayList<>();
+
+        try {
+            pageIds = RumbleParser.findEmbedIds(RumbleHttp.get("/" + videoId + ".html", SITE + "/", false));
+        } catch (IOException e) {
+            pageError = e;
+        }
+
         RumbleParser.Oembed oembed = oembedFor(videoId);
+        int main = Math.min(pageIds.size(), 1); // the page's first named id comes before oEmbed's
 
-        if (oembed != null && oembed.embedId != null) {
-            EMBED_IDS.put(videoId, oembed.embedId);
-            return oembed.embedId;
+        ids.addAll(pageIds.subList(0, main));
+
+        if (oembed != null && oembed.embedId != null && !ids.contains(oembed.embedId)) {
+            ids.add(oembed.embedId);
         }
 
-        // Fallback: the id written in the watch page itself
-        String embedId = RumbleParser.findEmbedId(RumbleHttp.get("/" + videoId + ".html", SITE + "/", false));
-
-        if (embedId == null) {
-            throw new IOException("player id not found (oEmbed and page both gave nothing)");
+        for (String id : pageIds) {
+            if (!ids.contains(id)) {
+                ids.add(id);
+            }
         }
 
-        EMBED_IDS.put(videoId, embedId);
-        return embedId;
+        if (ids.isEmpty()) {
+            throw new IOException("player id not found (" + (pageError != null ? "page: " + pageError.getMessage() : "page and oEmbed gave nothing") + ")");
+        }
+
+        EMBED_ID_LISTS.put(videoId, ids);
+        return ids;
     }
 
     private static final java.util.Map<String, RumbleParser.Oembed> OEMBEDS = new java.util.concurrent.ConcurrentHashMap<>();

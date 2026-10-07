@@ -56,6 +56,10 @@ public final class RumbleParser {
         public String channelName;
         public String channelThumb; // channel picture shown on the card
         public String html;         // markup of the card (first few only), for the debug report
+        public String shadow;       // content of the card's shadow root (first few only)
+        public String titleSource;  // where the title came from: attr, inner, link, heading, class, alt, slug...
+        public String tag;          // element name of the card, if it is a custom element
+        public boolean live;
         public long durationSec;
         public long publishedMs;
 
@@ -68,6 +72,7 @@ public final class RumbleParser {
             item.backgroundImageUrl = thumb;
             item.durationMs = durationSec * 1000;
             item.publishedMs = publishedMs;
+            item.live = live;
             item.secondTitle = ProviderMediaItem.buildSecondTitle(channelName, publishedMs);
             return item;
         }
@@ -241,9 +246,16 @@ public final class RumbleParser {
         Set<String> seen = new HashSet<>();
 
         try {
-            org.json.JSONArray array = new org.json.JSONArray(json);
+            org.json.JSONArray array;
+            Object parsed = new org.json.JSONTokener(json).nextValue();
 
-            for (int i = 0; i < array.length(); i++) {
+            if (parsed instanceof JSONObject) { // {"strategy": "...", "cards": [...]}
+                array = ((JSONObject) parsed).optJSONArray("cards");
+            } else {
+                array = parsed instanceof org.json.JSONArray ? (org.json.JSONArray) parsed : null;
+            }
+
+            for (int i = 0; array != null && i < array.length(); i++) {
                 JSONObject card = array.optJSONObject(i);
 
                 if (card == null || card.optString("id", "").isEmpty() || !seen.add(card.optString("id"))) {
@@ -254,13 +266,17 @@ public final class RumbleParser {
                 entry.id = card.optString("id");
                 entry.stem = stemOf(entry.id, card.optString("slug", ""));
                 entry.title = firstNonEmpty(textOf(card.optString("title", "")), titleFromSlug(card.optString("slug", "")));
+                entry.titleSource = blankToNull(card.optString("ts", ""));
                 entry.thumb = blankToNull(card.optString("thumb", ""));
                 entry.channelId = blankToNull(card.optString("channelId", ""));
                 entry.channelName = blankToNull(card.optString("channelName", ""));
                 entry.channelThumb = blankToNull(card.optString("avatar", ""));
-                entry.html = blankToNull(card.optString("html", ""));
                 entry.durationSec = card.optLong("duration");
                 entry.publishedMs = parseIsoDate(blankToNull(card.optString("pub", "")));
+                entry.live = card.optBoolean("live", false);
+                entry.tag = blankToNull(card.optString("tag", ""));
+                entry.html = blankToNull(card.optString("html", ""));
+                entry.shadow = blankToNull(card.optString("shadow", ""));
                 result.add(entry);
             }
         } catch (org.json.JSONException e) {
@@ -874,6 +890,67 @@ public final class RumbleParser {
      * The id Rumble's player knows is not the one in the watch page address. It is written in the watch page itself,
      * e.g. as "https://rumble.com/embed/vb0ofn/" (also seen JSON-escaped or URL-encoded).
      */
+    private static final String EMBED = "(?:\\\\?/|%2F)embed(?:\\\\?/|%2F)(?:[0-9a-z]+\\.)?([0-9a-z]+)";
+    private static final Pattern[] MAIN_VIDEO_ID = {
+            // JSON-LD: "embedUrl": ".../embed/ID/"
+            Pattern.compile("embedUrl[\"']?\\s*[:=]\\s*[\"']?[^\"'\\s<>]*?rumble\\.com" + EMBED, Pattern.CASE_INSENSITIVE),
+            // <meta property="og:video..." content=".../embed/ID/">, either attribute order
+            Pattern.compile("property=[\"']og:video[^>]*?content=[\"'][^\"']*?rumble\\.com" + EMBED, Pattern.CASE_INSENSITIVE),
+            Pattern.compile("content=[\"'][^\"']*?rumble\\.com" + EMBED + "[\"'][^>]*?property=[\"']og:video", Pattern.CASE_INSENSITIVE),
+            // <link type="application/json+oembed" href="...url=...embed%2FID%2F">
+            Pattern.compile("json\\+oembed[^>]*?href=[\"'][^\"']*?rumble\\.com" + EMBED, Pattern.CASE_INSENSITIVE),
+    };
+
+    /**
+     * Player ids found in a watch page. The first ones come from places that describe the page's own video
+     * (structured data, og:video, oEmbed link); the rest are any other embed links on the page (related videos...).
+     */
+    public static List<String> findEmbedIds(String watchPageHtml) {
+        List<String> ids = new ArrayList<>();
+
+        if (watchPageHtml == null) {
+            return ids;
+        }
+
+        for (Pattern pattern : MAIN_VIDEO_ID) {
+            Matcher matcher = pattern.matcher(watchPageHtml);
+
+            while (matcher.find()) {
+                String id = matcher.group(1).toLowerCase(Locale.US);
+
+                if (!ids.contains(id)) {
+                    ids.add(id);
+                }
+            }
+        }
+
+        Matcher any = EMBED_ID.matcher(watchPageHtml);
+
+        while (any.find()) {
+            String id = any.group(1).toLowerCase(Locale.US);
+
+            if (!ids.contains(id) && ids.size() < 6) {
+                ids.add(id);
+            }
+        }
+
+        return ids;
+    }
+
+    /** Do two titles name the same video? Lenient: ignores case, spacing, punctuation and emoji; compares the start. */
+    public static boolean titlesMatch(String a, String b) {
+        String na = a == null ? "" : a.toLowerCase(Locale.US).replaceAll("[^a-z0-9]", "");
+        String nb = b == null ? "" : b.toLowerCase(Locale.US).replaceAll("[^a-z0-9]", "");
+
+        if (na.isEmpty() || nb.isEmpty()) {
+            return true; // nothing to compare
+        }
+
+        String headA = na.substring(0, Math.min(16, na.length()));
+        String headB = nb.substring(0, Math.min(16, nb.length()));
+        return nb.contains(headA) || na.contains(headB);
+    }
+
     public static String findEmbedId(String watchPageHtml) {
         if (watchPageHtml == null) {
             return null;
