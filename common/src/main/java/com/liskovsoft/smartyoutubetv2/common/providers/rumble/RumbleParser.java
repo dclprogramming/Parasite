@@ -55,6 +55,7 @@ public final class RumbleParser {
         public String channelId; // "c/Name" or "user/Name"
         public String channelName;
         public String channelThumb; // channel picture shown on the card
+        public String html;         // markup of the card (first few only), for the debug report
         public long durationSec;
         public long publishedMs;
 
@@ -72,8 +73,41 @@ public final class RumbleParser {
         }
     }
 
+    /** One playable address with what is known about it. */
+    public static class Candidate {
+        public final String url;
+        public final String kind; // "MP4", "HLS" or "WebM"
+        public final int height;  // 0 when unknown
+
+        Candidate(String url, String kind, int height) {
+            this.url = url;
+            this.kind = kind;
+            this.height = height;
+        }
+
+        public String describe() {
+            if (kind.equals("HLS")) {
+                return "HLS (adaptive)";
+            }
+
+            return kind + " " + (height > 0 ? height + "p" : "(size unknown)");
+        }
+    }
+
+    /** What Rumble's oEmbed service says about one watch page. It is exact for that page. */
+    public static class Oembed {
+        public String embedId;
+        public String title;
+        public String thumb;
+        public String author;
+        public long durationSec;
+    }
+
     /** Playback info from the embed JSON. */
     public static class Stream {
+        /** All usable addresses, most preferred first: mp4 (tallest up to the cap), hls, webm. */
+        public final java.util.List<Candidate> candidates = new ArrayList<>();
+        public Candidate chosen;
         public String title;
         public String authorName;
         public String channelId;
@@ -86,9 +120,14 @@ public final class RumbleParser {
         public String hlsUrl;
         public String webmUrl; // last resort
         public int webmHeight;
+        public String stability; // extra note for the details line (e.g. which server)
 
         /** Which stream the app plays, in words. Shown in the video description to help diagnose playback problems. */
         public String describeChoice() {
+            if (chosen != null) {
+                return chosen.describe() + (chosen.url != null && stability != null ? " " + stability : "");
+            }
+
             if (mp4Url != null) {
                 return "MP4 " + (mp4Height > 0 ? mp4Height + "p" : "(size unknown)");
             }
@@ -219,6 +258,7 @@ public final class RumbleParser {
                 entry.channelId = blankToNull(card.optString("channelId", ""));
                 entry.channelName = blankToNull(card.optString("channelName", ""));
                 entry.channelThumb = blankToNull(card.optString("avatar", ""));
+                entry.html = blankToNull(card.optString("html", ""));
                 entry.durationSec = card.optLong("duration");
                 entry.publishedMs = parseIsoDate(blankToNull(card.optString("pub", "")));
                 result.add(entry);
@@ -359,6 +399,19 @@ public final class RumbleParser {
 
             JSONObject ua = root.optJSONObject("ua"); // is an empty array when nothing can be played
             if (ua != null) {
+                for (Object[] v : sortedVariants(ua.optJSONObject("mp4"))) {
+                    stream.candidates.add(new Candidate((String) v[1], "MP4", (Integer) v[0]));
+                }
+
+                JSONObject hlsVariants = ua.optJSONObject("hls");
+                for (Object[] v : sortedVariants(hlsVariants)) {
+                    stream.candidates.add(new Candidate((String) v[1], "HLS", 0));
+                }
+
+                for (Object[] v : sortedVariants(ua.optJSONObject("webm"))) {
+                    stream.candidates.add(new Candidate((String) v[1], "WebM", (Integer) v[0]));
+                }
+
                 Object[] mp4 = bestVariant(ua.optJSONObject("mp4"));
                 Object[] webm = bestVariant(ua.optJSONObject("webm"));
                 stream.mp4Url = mp4 != null ? (String) mp4[1] : null;
@@ -382,6 +435,17 @@ public final class RumbleParser {
                 if (stream.hlsUrl == null) {
                     stream.hlsUrl = scan.hls;
                 }
+
+                stream.candidates.clear();
+                for (Object[] v : scan.sorted(scan.mp4)) {
+                    stream.candidates.add(new Candidate((String) v[1], "MP4", (Integer) v[0]));
+                }
+                if (scan.hls != null) {
+                    stream.candidates.add(new Candidate(scan.hls, "HLS", 0));
+                }
+                for (Object[] v : scan.sorted(scan.webm)) {
+                    stream.candidates.add(new Candidate((String) v[1], "WebM", (Integer) v[0]));
+                }
             }
 
             if (stream.mp4Url == null) { // older embed format
@@ -403,16 +467,71 @@ public final class RumbleParser {
         try {
             JSONObject root = new JSONObject(json);
             Stream stream = new Stream();
-            MediaScan scan = new MediaScan();
+            List<Object[]> found = new ArrayList<>(); // {url, size}
             org.json.JSONArray urls = root.optJSONArray("urls");
 
             for (int i = 0; urls != null && i < urls.length(); i++) {
-                scan.add(null, 0, urls.optString(i, ""));
+                Object item = urls.opt(i);
+
+                if (item instanceof JSONObject) {
+                    found.add(new Object[]{((JSONObject) item).optString("u", ""), ((JSONObject) item).optLong("s", 0)});
+                } else if (item instanceof String) {
+                    found.add(new Object[]{item, 0L});
+                }
             }
 
-            stream.mp4Url = scan.mp4.isEmpty() ? null : (String) scan.mp4.get(0)[1];
-            stream.webmUrl = scan.best(scan.webm);
-            stream.hlsUrl = scan.hls;
+            // 1) the file the page's player is actually playing, 2) other media by size (biggest = the real video), previews last
+            List<String> ordered = new ArrayList<>();
+            String src = root.optString("src", "");
+
+            if (isMediaUrl(src) && !src.startsWith("blob:")) {
+                ordered.add(src);
+            }
+
+            Collections.sort(found, new Comparator<Object[]>() {
+                @Override
+                public int compare(Object[] a, Object[] b) {
+                    boolean pa = isPreviewUrl((String) a[0]);
+                    boolean pb = isPreviewUrl((String) b[0]);
+
+                    if (pa != pb) {
+                        return pa ? 1 : -1;
+                    }
+
+                    return Long.compare((Long) b[1], (Long) a[1]);
+                }
+            });
+
+            for (Object[] entry : found) {
+                String url = (String) entry[0];
+
+                if (isMediaUrl(url) && !ordered.contains(url)) {
+                    ordered.add(url);
+                }
+            }
+
+            for (String url : ordered) {
+                String lower = url.toLowerCase(Locale.US);
+
+                if (lower.contains(".mp4")) {
+                    stream.candidates.add(new Candidate(url, "MP4", 0));
+                } else if (lower.contains(".m3u8")) {
+                    stream.candidates.add(new Candidate(url, "HLS", 0));
+                } else if (lower.contains(".webm")) {
+                    stream.candidates.add(new Candidate(url, "WebM", 0));
+                }
+            }
+
+            for (Candidate c : stream.candidates) {
+                if (c.kind.equals("MP4") && stream.mp4Url == null) {
+                    stream.mp4Url = c.url;
+                } else if (c.kind.equals("HLS") && stream.hlsUrl == null) {
+                    stream.hlsUrl = c.url;
+                } else if (c.kind.equals("WebM") && stream.webmUrl == null) {
+                    stream.webmUrl = c.url;
+                }
+            }
+
             stream.title = textOf(root.optString("title", null));
 
             if (stream.title != null) {
@@ -420,7 +539,36 @@ public final class RumbleParser {
             }
 
             stream.thumb = root.isNull("image") || root.optString("image", "").isEmpty() ? null : root.optString("image");
-            return stream.mp4Url != null || stream.hlsUrl != null || stream.webmUrl != null ? stream : null;
+            stream.stability = "(read from the page)";
+            return stream.candidates.isEmpty() ? null : stream;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static boolean isMediaUrl(String url) {
+        String lower = url == null ? "" : url.toLowerCase(Locale.US);
+        return lower.startsWith("http") && (lower.contains(".mp4") || lower.contains(".m3u8") || lower.contains(".webm"));
+    }
+
+    /** Short preview clips, sprites and posters that the page loads next to the real video. */
+    static boolean isPreviewUrl(String url) {
+        String lower = url == null ? "" : url.toLowerCase(Locale.US);
+        return lower.contains("preview") || lower.contains("thumb") || lower.contains("timeline") || lower.contains("sprite")
+                || lower.contains("storyboard") || lower.contains("poster") || lower.contains(".gif");
+    }
+
+    /** Exact answer for one watch page (title, picture, player id), from Rumble's oEmbed service. */
+    public static Oembed parseOembed(String json) {
+        try {
+            JSONObject root = new JSONObject(json);
+            Oembed oembed = new Oembed();
+            oembed.embedId = findEmbedId(root.optString("html", ""));
+            oembed.title = textOf(root.optString("title", null));
+            oembed.thumb = blankToNull(root.optString("thumbnail_url", ""));
+            oembed.author = textOf(root.optString("author_name", null));
+            oembed.durationSec = root.optLong("duration");
+            return oembed.embedId != null || oembed.title != null ? oembed : null;
         } catch (Exception e) {
             return null;
         }
@@ -483,6 +631,27 @@ public final class RumbleParser {
             }
         }
 
+        List<Object[]> sorted(List<Object[]> list) {
+            List<Object[]> copy = new ArrayList<>(list);
+
+            Collections.sort(copy, new Comparator<Object[]>() {
+                @Override
+                public int compare(Object[] a, Object[] b) {
+                    return rank((Integer) a[0]) - rank((Integer) b[0]);
+                }
+
+                private int rank(int h) {
+                    if (h <= 0) {
+                        return 100000;
+                    }
+
+                    return h <= MAX_HEIGHT ? MAX_HEIGHT - h : 10000 + h;
+                }
+            });
+
+            return copy;
+        }
+
         /** Highest resolution up to 1080p, else the first one. */
         String best(List<Object[]> list) {
             String best = null;
@@ -517,6 +686,53 @@ public final class RumbleParser {
     /**
      * Picks the highest resolution up to 1080p from {"720": {"url": ...}, "480": {...}} (keys are heights or names).
      */
+    /** Variants as {height, url}: tallest up to MAX_HEIGHT first, then taller ones (smallest first), then unknown sizes. */
+    private static List<Object[]> sortedVariants(JSONObject variants) {
+        List<Object[]> result = new ArrayList<>();
+
+        if (variants == null) {
+            return result;
+        }
+
+        Iterator<String> keys = variants.keys();
+
+        while (keys.hasNext()) {
+            String key = keys.next();
+            JSONObject variant = variants.optJSONObject(key);
+
+            if (variant == null || variant.isNull("url") || variant.optString("url", "").isEmpty()) {
+                continue;
+            }
+
+            JSONObject meta = variant.optJSONObject("meta");
+            int height = meta != null ? meta.optInt("h", 0) : 0;
+
+            if (height == 0) {
+                height = parseInt(key);
+            }
+
+            result.add(new Object[]{height, variant.optString("url")});
+        }
+
+        Collections.sort(result, new Comparator<Object[]>() {
+            @Override
+            public int compare(Object[] a, Object[] b) {
+                return rank((Integer) a[0]) - rank((Integer) b[0]);
+            }
+
+            /** Lower is better. */
+            private int rank(int h) {
+                if (h <= 0) {
+                    return 100000;
+                }
+
+                return h <= MAX_HEIGHT ? MAX_HEIGHT - h : 10000 + h;
+            }
+        });
+
+        return result;
+    }
+
     private static Object[] bestVariant(JSONObject variants) {
         if (variants == null) {
             return null;

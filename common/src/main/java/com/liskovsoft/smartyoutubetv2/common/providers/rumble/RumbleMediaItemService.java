@@ -5,6 +5,7 @@ import com.liskovsoft.mediaserviceinterfaces.data.MediaItem;
 import com.liskovsoft.mediaserviceinterfaces.data.MediaItemFormatInfo;
 import com.liskovsoft.mediaserviceinterfaces.data.MediaItemMetadata;
 import com.liskovsoft.sharedutils.rx.RxHelper;
+import com.liskovsoft.smartyoutubetv2.common.providers.HostCheck;
 import com.liskovsoft.smartyoutubetv2.common.providers.LocalContentBase;
 import com.liskovsoft.smartyoutubetv2.common.providers.ProviderStore;
 import com.liskovsoft.smartyoutubetv2.common.providers.model.ProviderFormatInfo;
@@ -75,16 +76,61 @@ public class RumbleMediaItemService extends StubMediaItemService {
 
         RumbleParser.Stream stream = RumbleApi.stream(videoId);
 
-        String url = stream.mp4Url != null ? stream.mp4Url : (stream.hlsUrl != null ? stream.hlsUrl : stream.webmUrl); // the player reads the type from the file extension
-
-        if (url == null) {
-            return ProviderFormatInfo.unplayable(videoId, "This video can't be played here");
+        if (stream.candidates.isEmpty()) { // layouts the structured parse did not cover
+            if (stream.mp4Url != null) {
+                stream.candidates.add(new RumbleParser.Candidate(stream.mp4Url, "MP4", stream.mp4Height));
+            }
+            if (stream.hlsUrl != null) {
+                stream.candidates.add(new RumbleParser.Candidate(stream.hlsUrl, "HLS", 0));
+            }
+            if (stream.webmUrl != null) {
+                stream.candidates.add(new RumbleParser.Candidate(stream.webmUrl, "WebM", stream.webmHeight));
+            }
         }
+
+        java.util.Set<String> unreachable = new java.util.LinkedHashSet<>();
+        RumbleParser.Candidate pick = choose(stream, unreachable);
+
+        if (pick == null) {
+            return ProviderFormatInfo.unplayable(videoId, unreachable.isEmpty() ? "This video can't be played here"
+                    : "This network can't look up Rumble's video server (" + unreachable + "). Check the DNS filter or blocklist.");
+        }
+
+        String url = pick.url; // the player reads the type from the file extension
 
         mStore.addToHistory(stream.toMediaItem(videoId));
 
         return ProviderFormatInfo.playable(videoId, url)
                 .describe(stream.title, stream.authorName, stream.channelId, "Rumble stream: " + stream.describeChoice(), stream.durationSec);
+    }
+
+    /**
+     * First stream whose server this network can find. Sets what the details line says about it.
+     */
+    private RumbleParser.Candidate choose(RumbleParser.Stream stream, java.util.Set<String> unreachable) {
+        if (stream.candidates.isEmpty()) { // layouts the structured parse did not cover
+            if (stream.mp4Url != null) {
+                stream.candidates.add(new RumbleParser.Candidate(stream.mp4Url, "MP4", stream.mp4Height));
+            }
+            if (stream.hlsUrl != null) {
+                stream.candidates.add(new RumbleParser.Candidate(stream.hlsUrl, "HLS", 0));
+            }
+            if (stream.webmUrl != null) {
+                stream.candidates.add(new RumbleParser.Candidate(stream.webmUrl, "WebM", stream.webmHeight));
+            }
+        }
+
+        for (RumbleParser.Candidate candidate : stream.candidates) { // a DNS filter can hide some of Rumble's video servers
+            if (HostCheck.resolves(candidate.url)) {
+                stream.chosen = candidate;
+                stream.stability = "via " + HostCheck.hostOf(candidate.url) + (unreachable.isEmpty() ? "" : " (skipped unreachable: " + unreachable + ")");
+                return candidate;
+            }
+
+            unreachable.add(HostCheck.hostOf(candidate.url));
+        }
+
+        return null;
     }
 
     // Video details
@@ -143,7 +189,13 @@ public class RumbleMediaItemService extends StubMediaItemService {
         ProviderMetadata metadata = new ProviderMetadata();
         metadata.title = stream.title;
         metadata.secondTitle = item.secondTitle;
+        choose(stream, new java.util.LinkedHashSet<String>());
         metadata.description = "Rumble stream: " + stream.describeChoice();
+        RumbleParser.Oembed oembed = RumbleApi.oembedFor(videoId);
+
+        if (oembed != null && oembed.title != null) { // exact title of this watch page
+            metadata.title = oembed.title;
+        }
         metadata.author = stream.authorName;
         metadata.publishedDate = stream.publishedMs > 0 ? ProviderMediaItem.timeAgo(stream.publishedMs) : null;
         metadata.videoId = videoId;

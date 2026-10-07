@@ -100,7 +100,7 @@ public final class RumbleApi {
             + "    if(!t){t=text(it.a);}\n"
             + "    return t;\n"
             + "  }\n"
-            + "  var list=items.map(function(it){\n"
+            + "  var list=items.map(function(it,idx){\n"
             + "    var card=it.card, chId='', chName='';\n"
             + "    var ch=card.querySelector('a[href^=\"/c/\"],a[href^=\"/user/\"],a[href*=\"rumble.com/c/\"],a[href*=\"rumble.com/user/\"]');\n"
             + "    if(ch){\n"
@@ -110,7 +110,7 @@ public final class RumbleApi {
             + "    var dur=0, dm=/(?:(\\d+):)?(\\d+):(\\d{2})/.exec(text(card.querySelector('[class*=\"duration\"]')));\n"
             + "    if(dm){dur=(parseInt(dm[1]||'0',10)*60+parseInt(dm[2],10))*60+parseInt(dm[3],10);}\n"
             + "    var tm=card.querySelector('time[datetime]');\n"
-            + "    return {id:it.id,slug:it.slug,title:titleOf(it),thumb:imgUrl(card),channelId:chId,channelName:chName,avatar:avatarOf(card),duration:dur,pub:tm?tm.getAttribute('datetime'):''};\n"
+            + "    return {id:it.id,slug:it.slug,title:titleOf(it),thumb:imgUrl(card),channelId:chId,channelName:chName,avatar:avatarOf(card),duration:dur,pub:tm?tm.getAttribute('datetime'):'',html:idx<3?(card.outerHTML||'').replace(/\\s+/g,' ').substring(0,1200):''};\n"
             + "  });\n"
             + "  try{window.scrollTo(0,document.body.scrollHeight);}catch(e){}\n"
             + "  var stable=(w.__pn===list.length); w.__pn=list.length;\n"
@@ -124,10 +124,12 @@ public final class RumbleApi {
             + "if(v){try{v.muted=true;v.play();}catch(e){}o.src=v.currentSrc||v.src||'';}"
             + "var b=document.querySelector('[class*=\"play-button\"],[class*=\"PlayButton\"],[class*=\"big-play\"],button[aria-label*=\"lay\"]');"
             + "if(b){try{b.click();}catch(e){}}"
-            + "try{performance.getEntriesByType('resource').forEach(function(r){if(/\\.(mp4|m3u8|webm)(\\?|$)/i.test(r.name)){o.urls.push(r.name);}});}catch(e){}"
-            + "if(o.src&&o.src.indexOf('blob:')!==0){o.urls.push(o.src);}"
+            + "try{performance.getEntriesByType('resource').forEach(function(r){if(/\\.(mp4|m3u8|webm)(\\?|$)/i.test(r.name)){o.urls.push({u:r.name,s:(r.decodedBodySize||r.encodedBodySize||r.transferSize||0)});}});}catch(e){}"
+            + "if(o.src&&o.src.indexOf('blob:')!==0&&!/\\.(mp4|m3u8|webm)(\\?|$)/i.test(o.src)){o.urls.push({u:o.src,s:0});}"
             + "var m=document.querySelector('meta[property=\"og:image\"]');if(m){o.image=m.content;}"
-            + "return o.urls.length?JSON.stringify(o):'';})()";
+            + "var good=(o.src&&o.src.indexOf('blob:')!==0)||o.urls.length;"
+            + "if(good&&v){try{v.pause();}catch(e){}}"
+            + "return good?JSON.stringify(o):'';})()";
     /** A page with fewer videos than this is the last one. */
     public static final int MIN_FULL_PAGE = 8;
 
@@ -165,6 +167,9 @@ public final class RumbleApi {
 
         if (!entries.isEmpty()) {
             CACHE.put(key, new Object[]{System.currentTimeMillis(), entries});
+
+            final List<RumbleParser.Entry> checked = entries;
+            new Thread(() -> RumbleDebug.auditListing(path, checked)).start(); // quiet unless something looks wrong
         }
 
         return entries;
@@ -311,14 +316,48 @@ public final class RumbleApi {
             return cached;
         }
 
+        RumbleParser.Oembed oembed = oembedFor(videoId);
+
+        if (oembed != null && oembed.embedId != null) {
+            EMBED_IDS.put(videoId, oembed.embedId);
+            return oembed.embedId;
+        }
+
+        // Fallback: the id written in the watch page itself
         String embedId = RumbleParser.findEmbedId(RumbleHttp.get("/" + videoId + ".html", SITE + "/", false));
 
         if (embedId == null) {
-            throw new IOException("player id not found in the page");
+            throw new IOException("player id not found (oEmbed and page both gave nothing)");
         }
 
         EMBED_IDS.put(videoId, embedId);
         return embedId;
+    }
+
+    private static final java.util.Map<String, RumbleParser.Oembed> OEMBEDS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * What Rumble says about this watch page: the real title, picture and player id. Null if the service can't be reached.
+     */
+    public static RumbleParser.Oembed oembedFor(String videoId) {
+        RumbleParser.Oembed cached = OEMBEDS.get(videoId);
+
+        if (cached != null) {
+            return cached;
+        }
+
+        try {
+            RumbleParser.Oembed oembed = RumbleParser.parseOembed(
+                    RumbleHttp.get("/api/Media/oembed.json?url=" + encode(SITE + "/" + videoId + ".html"), SITE + "/", true));
+
+            if (oembed != null) {
+                OEMBEDS.put(videoId, oembed);
+            }
+
+            return oembed;
+        } catch (IOException e) {
+            return null;
+        }
     }
 
     /** First characters of an answer, for error messages. */
