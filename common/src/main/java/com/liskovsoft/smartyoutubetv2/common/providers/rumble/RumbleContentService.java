@@ -4,6 +4,7 @@ import com.liskovsoft.mediaserviceinterfaces.data.MediaGroup;
 import com.liskovsoft.mediaserviceinterfaces.data.MediaItem;
 import com.liskovsoft.sharedutils.rx.RxHelper;
 import com.liskovsoft.smartyoutubetv2.common.prefs.ProviderData;
+import com.liskovsoft.smartyoutubetv2.common.providers.BrowserFetcher;
 import com.liskovsoft.smartyoutubetv2.common.providers.LocalContentBase;
 import com.liskovsoft.smartyoutubetv2.common.providers.ProviderAuth;
 import com.liskovsoft.smartyoutubetv2.common.providers.ProviderStore;
@@ -21,7 +22,8 @@ import java.util.concurrent.Callable;
  * Rumble implementation of the app's content sections. There is no login: subscriptions and history are local.
  */
 public class RumbleContentService extends LocalContentBase {
-    private static final int MAX_FEED_CHANNELS = 6; // every followed channel is one rendered page
+    private static final long FEED_BUDGET_MS = 25000;
+    private static final int MAX_FEED_CHANNELS = 4; // every followed channel is one rendered page
 
     private static class Row {
         final String title;
@@ -161,32 +163,68 @@ public class RumbleContentService extends LocalContentBase {
         return group;
     }
 
+    private static long sLastAccountSync;
+    private static boolean sAccountSyncing;
+
     @Override
     protected MediaGroup channelsGroup(boolean sortByName) {
         ProviderMediaGroup group = (ProviderMediaGroup) super.channelsGroup(sortByName);
-        fillKnownPictures(group);
 
-        if (isSignedIn()) { // add the channels seen in the account's subscription feed
-            try {
-                java.util.Set<String> known = new java.util.HashSet<>();
-
-                for (MediaItem item : group.getMediaItems()) {
-                    known.add(item.getChannelId());
-                }
-
-                for (RumbleParser.Entry entry : RumbleApi.listingSignedIn("/subscriptions", 1)) {
-                    if (entry.channelId != null && known.add(entry.channelId)) {
-                        group.add(ProviderMediaItem.channel(entry.channelId, entry.channelName, entry.channelThumb));
-                    }
-                }
-            } catch (IOException e) {
-                // Local follows only
+        if (isSignedIn()) {
+            if (group.isEmpty()) { // first time: nothing saved yet, so wait for the account's channels once
+                syncAccountChannels();
+                group = (ProviderMediaGroup) super.channelsGroup(sortByName);
+            } else {
+                syncAccountChannelsInBackground();
             }
         }
 
         fillKnownPictures(group);
         loadMissingPictures(group);
         return group;
+    }
+
+    /**
+     * Saves the channels seen in the signed-in account's subscription feed as follows. Opening the Channels list never
+     * waits for this once there are saved channels.
+     */
+    private void syncAccountChannels() {
+        synchronized (RumbleContentService.class) {
+            sAccountSyncing = true;
+        }
+
+        try {
+            for (RumbleParser.Entry entry : RumbleApi.listingSignedIn("/subscriptions", 1)) {
+                if (entry.channelId != null) {
+                    mStore.follow(ProviderMediaItem.channel(entry.channelId, entry.channelName, entry.channelThumb));
+                }
+            }
+
+            synchronized (RumbleContentService.class) {
+                sLastAccountSync = System.currentTimeMillis();
+            }
+        } catch (IOException e) {
+            // Try again next time
+        } finally {
+            synchronized (RumbleContentService.class) {
+                sAccountSyncing = false;
+            }
+        }
+    }
+
+    private void syncAccountChannelsInBackground() {
+        synchronized (RumbleContentService.class) {
+            if (sAccountSyncing || System.currentTimeMillis() - sLastAccountSync < 10 * 60 * 1000) {
+                return;
+            }
+
+            sAccountSyncing = true;
+        }
+
+        new Thread(() -> {
+            BrowserFetcher.waitUntilIdle(60000); // screens that are loading come first
+            syncAccountChannels();
+        }).start();
     }
 
     /** Channel pictures seen on pages earlier. */
@@ -230,6 +268,8 @@ public class RumbleContentService extends LocalContentBase {
 
         new Thread(() -> {
             try {
+                BrowserFetcher.waitUntilIdle(60000);
+
                 for (String channelId : missing) {
                     try {
                         ProviderMediaItem info = RumbleApi.channelInfo(channelId);
@@ -260,19 +300,28 @@ public class RumbleContentService extends LocalContentBase {
             return feed;
         }
 
-        List<Callable<ProviderMediaGroup>> tasks = new ArrayList<>();
+        // One channel page at a time (the hidden browser does one page at a time anyway). Stop early once there is
+        // something to show and a time budget has passed, so the screen opens instead of waiting for every channel.
+        List<ProviderMediaItem> merged = new ArrayList<>();
+        long start = System.currentTimeMillis();
+        IOException lastError = null;
 
         for (int i = 0; i < channels.size() && i < MAX_FEED_CHANNELS; i++) {
-            final String channelId = channels.get(i).channelId;
-            tasks.add(() -> videoPage(MediaGroup.TYPE_SUBSCRIPTIONS, "Subscriptions", RumbleApi.channelPath(channelId), 1));
+            if (!merged.isEmpty() && System.currentTimeMillis() - start > FEED_BUDGET_MS) {
+                break;
+            }
+
+            try {
+                for (MediaItem item : videoPage(MediaGroup.TYPE_SUBSCRIPTIONS, "Subscriptions", RumbleApi.channelPath(channels.get(i).channelId), 1).getMediaItems()) {
+                    merged.add((ProviderMediaItem) item);
+                }
+            } catch (IOException e) {
+                lastError = e; // skip this channel
+            }
         }
 
-        List<ProviderMediaItem> merged = new ArrayList<>();
-
-        for (MediaGroup group : runParallel(tasks)) {
-            for (MediaItem item : group.getMediaItems()) {
-                merged.add((ProviderMediaItem) item);
-            }
+        if (merged.isEmpty() && lastError != null) {
+            throw lastError;
         }
 
         RumbleParser.sortNewestFirst(merged);

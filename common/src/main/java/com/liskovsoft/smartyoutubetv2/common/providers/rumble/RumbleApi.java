@@ -312,7 +312,7 @@ public final class RumbleApi {
      * Name and picture of a channel, read from its page.
      */
     public static ProviderMediaItem channelInfo(String channelId) throws IOException {
-        return RumbleParser.parseChannelPage(channelId, RumbleHttp.get(channelPath(channelId), SITE + "/", false));
+        return RumbleParser.parseChannelPage(channelId, RumbleHttp.getDirect(channelPath(channelId), SITE + "/", false));
     }
 
     /**

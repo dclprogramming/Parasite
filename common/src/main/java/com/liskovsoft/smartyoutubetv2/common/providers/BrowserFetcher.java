@@ -58,7 +58,38 @@ public final class BrowserFetcher {
      * @param origin e.g. "https://rumble.com". The page that passes the browser check.
      * @param url    absolute url on the same origin.
      */
+    private static final java.util.concurrent.atomic.AtomicInteger PENDING = new java.util.concurrent.atomic.AtomicInteger();
+
+    /** Is a request running or waiting? Background work should hold back while screens are loading. */
+    public static boolean isBusy() {
+        return PENDING.get() > 0;
+    }
+
+    /** Blocks (up to maxMs) until no request is running or waiting. */
+    public static void waitUntilIdle(long maxMs) {
+        long end = System.currentTimeMillis() + maxMs;
+
+        while (isBusy() && System.currentTimeMillis() < end) {
+            try {
+                Thread.sleep(300);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+    }
+
     public static String fetch(String origin, String url) throws IOException {
+        PENDING.incrementAndGet();
+
+        try {
+            return fetchNow(origin, url);
+        } finally {
+            PENDING.decrementAndGet();
+        }
+    }
+
+    private static String fetchNow(String origin, String url) throws IOException {
         Context context = ProviderData.getAppContext();
 
         if (context == null) {
@@ -104,6 +135,16 @@ public final class BrowserFetcher {
      * @param autoplay let the page start video by itself (needed to read what a player loads; otherwise keep it off)
      */
     public static String scrape(String pageUrl, String script, int maxWaitSec, boolean autoplay) throws IOException {
+        PENDING.incrementAndGet();
+
+        try {
+            return scrapeNow(pageUrl, script, maxWaitSec, autoplay);
+        } finally {
+            PENDING.decrementAndGet();
+        }
+    }
+
+    private static String scrapeNow(String pageUrl, String script, int maxWaitSec, boolean autoplay) throws IOException {
         Context context = ProviderData.getAppContext();
 
         if (context == null) {

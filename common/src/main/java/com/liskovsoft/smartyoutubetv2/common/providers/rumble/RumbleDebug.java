@@ -6,6 +6,7 @@ import android.os.Looper;
 import android.util.Log;
 
 import com.liskovsoft.sharedutils.helpers.MessageHelpers;
+import com.liskovsoft.smartyoutubetv2.common.providers.BrowserFetcher;
 import com.liskovsoft.smartyoutubetv2.common.prefs.ProviderData;
 
 import java.util.regex.Matcher;
@@ -57,6 +58,8 @@ final class RumbleDebug {
                 return;
             }
         }
+
+        BrowserFetcher.waitUntilIdle(60000); // screens that are loading come first
 
         StringBuilder text = new StringBuilder();
         boolean problem = false;

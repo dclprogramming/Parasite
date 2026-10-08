@@ -72,6 +72,19 @@ final class RumbleHttp {
     }
 
     /**
+     * Plain request only: for small background jobs that must not occupy the hidden browser.
+     */
+    static String getDirect(String path, String referer, boolean json) throws IOException {
+        String body = ProviderHttp.get(ORIGIN + path, headers(referer, json));
+
+        if (isBlockPage(body, json)) {
+            throw new IOException("bot-check page instead of data");
+        }
+
+        return body;
+    }
+
+    /**
      * Is this answer a bot-check / error page instead of the requested data?
      */
     static boolean isBlockPage(String body, boolean json) {
