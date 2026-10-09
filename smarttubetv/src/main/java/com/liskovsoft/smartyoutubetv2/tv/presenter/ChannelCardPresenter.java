@@ -24,6 +24,7 @@ import com.liskovsoft.smartyoutubetv2.common.prefs.MainUIData;
 import com.liskovsoft.smartyoutubetv2.tv.R;
 import com.liskovsoft.smartyoutubetv2.tv.presenter.base.LongClickPresenter;
 import com.liskovsoft.smartyoutubetv2.tv.ui.browse.video.GridFragmentHelper;
+import com.liskovsoft.smartyoutubetv2.tv.util.LetterAvatarDrawable;
 import com.liskovsoft.smartyoutubetv2.tv.util.UiStyle;
 import com.liskovsoft.smartyoutubetv2.tv.util.ViewUtil;
 
@@ -119,9 +120,13 @@ public class ChannelCardPresenter extends LongClickPresenter {
         ImageView imageView = viewHolder.view.findViewById(R.id.channel_image);
         imageView.setVisibility(View.VISIBLE);
 
+        // Always show an icon: the channel's picture, or its first letter on a colour while there is no picture
+        Drawable letter = new LetterAvatarDrawable(video.getTitle());
+        String picture = video.cardImageUrl != null && video.cardImageUrl.startsWith("//") ? "https:" + video.cardImageUrl : video.cardImageUrl;
+
         Glide.with(context)
-                .load(video.cardImageUrl)
-                .apply(ViewUtil.glideOptions())
+                .load(picture == null || picture.isEmpty() ? null : picture)
+                .apply(ViewUtil.glideOptions().placeholder(letter).error(letter).fallback(letter))
                 .listener(mErrorListener)
                 //.error(R.drawable.card_placeholder) // R.color.lb_grey
                 .into(imageView);

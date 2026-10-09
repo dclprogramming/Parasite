@@ -51,7 +51,7 @@ public class FocusGlowLinearLayout extends LinearLayout {
                 mRestBackground = getBackground();
             }
             if (mGlow == null) {
-                mGlow = AnimatedGradientDrawable.accent(getContext(), 12, 0, 2);
+                mGlow = AnimatedGradientDrawable.accent(getContext(), 12, 0, 0);
             }
             setBackground(mGlow);
             mGlow.start();

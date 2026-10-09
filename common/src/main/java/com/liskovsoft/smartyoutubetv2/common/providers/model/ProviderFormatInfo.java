@@ -41,6 +41,10 @@ public class ProviderFormatInfo implements MediaItemFormatInfo {
         return info;
     }
 
+    private boolean isHls() {
+        return !mUrls.isEmpty() && mUrls.get(0) != null && mUrls.get(0).toLowerCase(java.util.Locale.US).contains(".m3u8");
+    }
+
     /** Marks a live HLS stream: the player then starts at the live edge instead of the beginning. */
     public ProviderFormatInfo live(boolean live) {
         mLive = live && !mUrls.isEmpty();
@@ -107,7 +111,7 @@ public class ProviderFormatInfo implements MediaItemFormatInfo {
 
     @Override
     public String getHlsManifestUrl() {
-        return mLive && !mUrls.isEmpty() ? mUrls.get(0) : null;
+        return isHls() ? mUrls.get(0) : null;
     }
 
     @Override
@@ -127,7 +131,7 @@ public class ProviderFormatInfo implements MediaItemFormatInfo {
 
     @Override
     public boolean containsHlsUrl() {
-        return mLive && !mUrls.isEmpty();
+        return isHls();
     }
 
     @Override

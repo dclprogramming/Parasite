@@ -18,8 +18,8 @@
     <dimen name="channel_card_height">30dp</dimen>
     <dimen name="channel_card_text_width">140dp</dimen>
     <!-- Parasite: channels page rows -->
-    <dimen name="channel_row_height">64dp</dimen>
-    <dimen name="channel_icon_size">48dp</dimen>
+    <dimen name="channel_row_height">38dp</dimen>
+    <dimen name="channel_icon_size">28dp</dimen>
 
     <dimen name="settings_image_size">44dp</dimen>
     <!-- Old value: 15dp -->
@@ -60,8 +60,10 @@
     <!-- Parasite: narrower sidebar (library default: 270dp). Was 210dp, +20 -->
     <dimen name="lb_browse_headers_width">230dp</dimen>
 
-    <!-- Parasite: fixed width of every sidebar entry = sidebar width minus BrowseHeaderStyle padding (12dp start + 14dp end) -->
-    <dimen name="header_item_width">204dp</dimen>
+    <!-- Parasite: fixed width of every sidebar entry = sidebar width minus BrowseHeaderStyle padding (22dp start + 24dp end) -->
+    <dimen name="header_item_width">184dp</dimen>
+    <!-- Parasite: fixed height of every sidebar entry and its focus/selected background, so it never changes between states -->
+    <dimen name="header_item_height">46dp</dimen>
 
     <!-- Make search bar more compact so more buttons could be added after it. -->
     <dimen name="lb_search_bar_items_width">600dp</dimen>

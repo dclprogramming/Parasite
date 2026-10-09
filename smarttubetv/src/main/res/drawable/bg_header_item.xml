@@ -2,7 +2,7 @@
 <!-- Sidebar entry: rounded pill. Accent when focused, soft white when it is the current page. -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:state_focused="true">
-        <inset android:insetTop="2dp" android:insetBottom="2dp" android:insetLeft="0dp" android:insetRight="0dp">
+        <inset android:insetTop="0dp" android:insetBottom="0dp" android:insetLeft="0dp" android:insetRight="0dp">
             <shape android:shape="rectangle">
                 <solid android:color="@color/header_focus_bg"/>
                 <corners android:radius="12dp"/>
@@ -10,7 +10,7 @@
         </inset>
     </item>
     <item android:state_selected="true">
-        <inset android:insetTop="2dp" android:insetBottom="2dp" android:insetLeft="0dp" android:insetRight="0dp">
+        <inset android:insetTop="0dp" android:insetBottom="0dp" android:insetLeft="0dp" android:insetRight="0dp">
             <shape android:shape="rectangle">
                 <solid android:color="@color/header_selected_bg"/>
                 <corners android:radius="12dp"/>

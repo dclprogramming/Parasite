@@ -28,6 +28,8 @@ import com.liskovsoft.smartyoutubetv2.common.app.presenters.settings.LanguageSet
 import com.liskovsoft.smartyoutubetv2.common.app.views.PlaybackView;
 import com.liskovsoft.smartyoutubetv2.common.app.views.ViewManager;
 import com.liskovsoft.smartyoutubetv2.common.misc.MediaServiceManager;
+import com.liskovsoft.smartyoutubetv2.common.prefs.ProviderData;
+import com.liskovsoft.smartyoutubetv2.common.providers.ProviderLogin;
 import com.liskovsoft.smartyoutubetv2.common.misc.MediaServiceManager.AccountChangeListener;
 import com.liskovsoft.smartyoutubetv2.common.prefs.common.DataChangeBase.OnDataChange;
 import com.liskovsoft.smartyoutubetv2.common.prefs.GeneralData;
@@ -195,8 +197,19 @@ public class NavigateTitleView extends TitleView implements OnDataChange, Accoun
         mSearchOrbView = findViewById(R.id.title_orb);
 
         mAccountView = findViewById(R.id.account_orb);
-        mAccountView.setOnOrbClickedListener(v -> AccountSelectionPresenter.instance(getContext()).nextAccountOrDialog());
+        mAccountView.setOnOrbClickedListener(v -> {
+            if (ProviderData.getSelected() != ProviderData.YOUTUBE) {
+                ProviderLogin.onTopIconClicked(getContext()); // Rumble / Odysee sign in or out
+            } else {
+                AccountSelectionPresenter.instance(getContext()).nextAccountOrDialog();
+            }
+        });
         mAccountView.setOnOrbLongClickedListener(v -> {
+            if (ProviderData.getSelected() != ProviderData.YOUTUBE) {
+                ProviderLogin.onTopIconClicked(getContext());
+                return true;
+            }
+
             AccountSettingsPresenter.instance(getContext()).show();
             return true;
         });
@@ -278,8 +291,39 @@ public class NavigateTitleView extends TitleView implements OnDataChange, Accoun
         }
     }
 
+    @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        ProviderLogin.addListener(mProviderSignInChanged);
+        updateAccountIcon();
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        super.onDetachedFromWindow();
+        ProviderLogin.removeListener(mProviderSignInChanged);
+    }
+
+    private Colors mNormalOrbColors;
+    private final Runnable mProviderSignInChanged = this::updateAccountIcon;
+
     private void updateAccountIcon() {
         if (!mIsAccountViewEnabled) {
+            return;
+        }
+
+        if (ProviderData.getSelected() != ProviderData.YOUTUBE) {
+            boolean signedIn = ProviderLogin.isSignedIn(getContext());
+            String name = ProviderLogin.nameOf(ProviderData.getSelected());
+            if (mNormalOrbColors == null) {
+                mNormalOrbColors = mAccountView.getOrbColors();
+            }
+
+            Colors orbColors = mNormalOrbColors;
+            int base = signedIn ? 0xFF2E7D32 : orbColors.color; // green while signed in
+            mAccountView.setOrbColors(new Colors(base, signedIn ? 0xFF43A047 : orbColors.brightColor, ContextCompat.getColor(getContext(), R.color.orb_icon_color)));
+            mAccountView.setOrbIcon(ContextCompat.getDrawable(getContext(), R.drawable.browse_title_account));
+            TooltipCompatHandler.setTooltipText(mAccountView, signedIn ? "Signed in to " + name + " (select to sign out)" : "Sign in to " + name);
             return;
         }
 

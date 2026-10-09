@@ -23,6 +23,7 @@ import java.util.concurrent.Callable;
  */
 public class RumbleContentService extends LocalContentBase {
     private static final long FEED_BUDGET_MS = 25000;
+    private static final int MAX_SYNC_PAGES = 12;
     private static final int MAX_FEED_CHANNELS = 4; // every followed channel is one rendered page
 
     private static class Row {
@@ -194,9 +195,21 @@ public class RumbleContentService extends LocalContentBase {
         }
 
         try {
-            for (RumbleParser.Entry entry : RumbleApi.listingSignedIn("/subscriptions", 1)) {
-                if (entry.channelId != null) {
-                    mStore.follow(ProviderMediaItem.channel(entry.channelId, entry.channelName, entry.channelThumb));
+            // One page of the subscription feed shows only the channels that posted lately, so read several pages
+            // until a page brings no new channel
+            java.util.Set<String> seen = new java.util.HashSet<>();
+
+            for (int page = 1; page <= MAX_SYNC_PAGES; page++) {
+                int before = seen.size();
+
+                for (RumbleParser.Entry entry : RumbleApi.listingSignedIn("/subscriptions", page)) {
+                    if (entry.channelId != null && seen.add(entry.channelId)) {
+                        mStore.follow(ProviderMediaItem.channel(entry.channelId, entry.channelName, entry.channelThumb));
+                    }
+                }
+
+                if (seen.size() == before) {
+                    break;
                 }
             }
 
@@ -253,7 +266,7 @@ public class RumbleContentService extends LocalContentBase {
         List<String> missing = new ArrayList<>();
 
         for (MediaItem item : group.getMediaItems()) {
-            if (item.getCardImageUrl() == null && item.getChannelId() != null && missing.size() < 10) {
+            if (item.getCardImageUrl() == null && item.getChannelId() != null && missing.size() < 30) {
                 missing.add(item.getChannelId());
             }
         }

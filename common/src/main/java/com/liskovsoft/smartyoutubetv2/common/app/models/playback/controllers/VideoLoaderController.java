@@ -317,7 +317,7 @@ public class VideoLoaderController extends BasePlayerController {
         } else if (acceptDashLive(formatInfo)) {
             Log.d(TAG, "Loading live video (current or past live stream) in dash format...");
             player.openDashUrl(formatInfo.getDashManifestUrl());
-        } else if (formatInfo.isLive() && formatInfo.containsHlsUrl()) {
+        } else if ((formatInfo.isLive() || formatInfo instanceof com.liskovsoft.smartyoutubetv2.common.providers.model.ProviderFormatInfo) && formatInfo.containsHlsUrl()) { // Rumble/Odysee HLS (also not live) must not go through the file extractors
             Log.d(TAG, "Loading live video (current or past live stream) in hls format...");
             player.openHlsUrl(formatInfo.getHlsManifestUrl());
         } else if (formatInfo.containsUrlFormats()) {
