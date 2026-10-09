@@ -61,9 +61,9 @@
     <dimen name="lb_browse_headers_width">230dp</dimen>
 
     <!-- Parasite: fixed width of every sidebar entry = sidebar width minus BrowseHeaderStyle padding (22dp start + 22dp end) -->
-    <dimen name="header_item_width">169dp</dimen>
+    <dimen name="header_item_width">180dp</dimen>
     <!-- Parasite: fixed height of every sidebar entry and its focus/selected background, so it never changes between states -->
-    <dimen name="header_item_height">46dp</dimen>
+    <dimen name="header_item_height">40dp</dimen>
 
     <!-- Make search bar more compact so more buttons could be added after it. -->
     <dimen name="lb_search_bar_items_width">600dp</dimen>
