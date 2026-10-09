@@ -25,6 +25,7 @@ public class ProviderFormatInfo implements MediaItemFormatInfo {
     private long mLengthSec;
     private String mUnplayableReason;
     private String mClickTrackingParams;
+    private boolean mLive;
 
     public static ProviderFormatInfo playable(String videoId, String url) {
         ProviderFormatInfo info = new ProviderFormatInfo();
@@ -38,6 +39,12 @@ public class ProviderFormatInfo implements MediaItemFormatInfo {
         info.mVideoId = videoId;
         info.mUnplayableReason = reason;
         return info;
+    }
+
+    /** Marks a live HLS stream: the player then starts at the live edge instead of the beginning. */
+    public ProviderFormatInfo live(boolean live) {
+        mLive = live && !mUrls.isEmpty();
+        return this;
     }
 
     public ProviderFormatInfo describe(String title, String author, String channelId, String description, long lengthSec) {
@@ -100,7 +107,7 @@ public class ProviderFormatInfo implements MediaItemFormatInfo {
 
     @Override
     public String getHlsManifestUrl() {
-        return null;
+        return mLive && !mUrls.isEmpty() ? mUrls.get(0) : null;
     }
 
     @Override
@@ -120,7 +127,7 @@ public class ProviderFormatInfo implements MediaItemFormatInfo {
 
     @Override
     public boolean containsHlsUrl() {
-        return false;
+        return mLive && !mUrls.isEmpty();
     }
 
     @Override
@@ -187,12 +194,12 @@ public class ProviderFormatInfo implements MediaItemFormatInfo {
 
     @Override
     public boolean isLive() {
-        return false;
+        return mLive;
     }
 
     @Override
     public boolean isLiveContent() {
-        return false;
+        return mLive;
     }
 
     @Override

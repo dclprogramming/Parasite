@@ -83,6 +83,8 @@ public final class RumbleParser {
         public final String url;
         public final String kind; // "MP4", "HLS" or "WebM"
         public final int height;  // 0 when unknown
+        public long bytes = -1;   // file size when it has been asked for, else -1
+        public boolean suspect;   // too small to be the whole video
 
         Candidate(String url, String kind, int height) {
             this.url = url;
@@ -95,7 +97,8 @@ public final class RumbleParser {
                 return "HLS (adaptive)";
             }
 
-            return kind + " " + (height > 0 ? height + "p" : "(size unknown)");
+            String size = bytes > 0 ? ", " + (bytes < 10_000_000 ? String.format(Locale.US, "%.1f", bytes / 1e6) : String.valueOf(bytes / 1_000_000)) + " MB" : "";
+            return kind + " " + (height > 0 ? height + "p" : "(size unknown)") + size;
         }
     }
 
@@ -126,11 +129,13 @@ public final class RumbleParser {
         public String webmUrl; // last resort
         public int webmHeight;
         public String stability; // extra note for the details line (e.g. which server)
+        public int skippedPreviews; // preview/thumbnail/timeline files that were left out
 
         /** Which stream the app plays, in words. Shown in the video description to help diagnose playback problems. */
         public String describeChoice() {
             if (chosen != null) {
-                return chosen.describe() + (chosen.url != null && stability != null ? " " + stability : "");
+                return (live && chosen.kind.equals("HLS") ? "LIVE " : "") + chosen.describe()
+                        + (chosen.url != null && stability != null ? " " + stability : "");
             }
 
             if (mp4Url != null) {
@@ -413,23 +418,24 @@ public final class RumbleParser {
                 stream.channelId = channelIdFromUrl(author.isNull("url") ? null : author.optString("url", null));
             }
 
+            int[] skipped = new int[1];
             JSONObject ua = root.optJSONObject("ua"); // is an empty array when nothing can be played
             if (ua != null) {
-                for (Object[] v : sortedVariants(ua.optJSONObject("mp4"))) {
+                for (Object[] v : sortedVariants(ua.optJSONObject("mp4"), skipped)) {
                     stream.candidates.add(new Candidate((String) v[1], "MP4", (Integer) v[0]));
                 }
 
                 JSONObject hlsVariants = ua.optJSONObject("hls");
-                for (Object[] v : sortedVariants(hlsVariants)) {
+                for (Object[] v : sortedVariants(hlsVariants, skipped)) {
                     stream.candidates.add(new Candidate((String) v[1], "HLS", 0));
                 }
 
-                for (Object[] v : sortedVariants(ua.optJSONObject("webm"))) {
+                for (Object[] v : sortedVariants(ua.optJSONObject("webm"), skipped)) {
                     stream.candidates.add(new Candidate((String) v[1], "WebM", (Integer) v[0]));
                 }
 
-                Object[] mp4 = bestVariant(ua.optJSONObject("mp4"));
-                Object[] webm = bestVariant(ua.optJSONObject("webm"));
+                Object[] mp4 = bestVariant(ua.optJSONObject("mp4"), new int[1]);
+                Object[] webm = bestVariant(ua.optJSONObject("webm"), new int[1]);
                 stream.mp4Url = mp4 != null ? (String) mp4[1] : null;
                 stream.mp4Height = mp4 != null ? (Integer) mp4[0] : 0;
                 stream.webmUrl = webm != null ? (String) webm[1] : null;
@@ -437,13 +443,13 @@ public final class RumbleParser {
 
                 JSONObject hls = ua.optJSONObject("hls");
                 if (hls != null) {
-                    Object[] auto = bestVariant(hls);
+                    Object[] auto = bestVariant(hls, new int[1]);
                     stream.hlsUrl = auto != null ? (String) auto[1] : null;
                 }
             }
 
             if (stream.mp4Url == null) { // layout differs: look for media links anywhere in the JSON
-                MediaScan scan = new MediaScan();
+                MediaScan scan = new MediaScan(skipped);
                 scan.visit(null, root);
                 stream.mp4Url = scan.best(scan.mp4);
                 stream.webmUrl = scan.best(scan.webm);
@@ -468,18 +474,30 @@ public final class RumbleParser {
                 JSONObject u = root.optJSONObject("u");
                 JSONObject mp4 = u != null ? u.optJSONObject("mp4") : null;
                 stream.mp4Url = mp4 != null && !mp4.isNull("url") ? mp4.optString("url", null) : null;
+
+                if (isPreviewUrl(stream.mp4Url)) {
+                    stream.mp4Url = null;
+                    skipped[0]++;
+                }
             }
 
+            stream.skippedPreviews = skipped[0];
             return stream;
         } catch (Exception e) {
             return null;
         }
     }
 
-    /**
-     * Result of reading the embed page's own player: {"src": "...", "urls": [...], "title": "...", "image": "..."}.
-     */
     public static Stream parseScrape(String json) {
+        return parseScrape(json, 0);
+    }
+
+    /**
+     * Result of reading the embed page's own player: {"src": "...", "urls": [...], "title": "...", "image": "...",
+     * "dur": seconds, "vh": picture height}. Preview files are dropped; a source whose length is far shorter than the
+     * video's own length ({@code expectedSec}, 0 when unknown) is a preview clip as well.
+     */
+    public static Stream parseScrape(String json, long expectedSec) {
         try {
             JSONObject root = new JSONObject(json);
             Stream stream = new Stream();
@@ -496,24 +514,25 @@ public final class RumbleParser {
                 }
             }
 
-            // 1) the file the page's player is actually playing, 2) other media by size (biggest = the real video), previews last
             List<String> ordered = new ArrayList<>();
             String src = root.optString("src", "");
+            double playerSec = root.optDouble("dur", 0);
+            int playerHeight = root.optInt("vh", 0);
+            boolean srcIsShort = expectedSec >= 30 && playerSec > 0 && playerSec < expectedSec * 0.6; // a clip, not the video
+            boolean srcIsPlayed = isMediaUrl(src) && !src.startsWith("blob:") && !isPreviewUrl(src) && !srcIsShort;
 
-            if (isMediaUrl(src) && !src.startsWith("blob:")) {
+            if (srcIsShort || (isMediaUrl(src) && isPreviewUrl(src))) {
+                stream.skippedPreviews++;
+            }
+
+            // 1) the file the page's player is actually playing (when it is not a clip), 2) the other files by size
+            if (srcIsPlayed) {
                 ordered.add(src);
             }
 
             Collections.sort(found, new Comparator<Object[]>() {
                 @Override
                 public int compare(Object[] a, Object[] b) {
-                    boolean pa = isPreviewUrl((String) a[0]);
-                    boolean pb = isPreviewUrl((String) b[0]);
-
-                    if (pa != pb) {
-                        return pa ? 1 : -1;
-                    }
-
                     return Long.compare((Long) b[1], (Long) a[1]);
                 }
             });
@@ -521,37 +540,47 @@ public final class RumbleParser {
             for (Object[] entry : found) {
                 String url = (String) entry[0];
 
-                if (isMediaUrl(url) && !ordered.contains(url)) {
-                    ordered.add(url);
+                if (!isMediaUrl(url) || ordered.contains(url)) {
+                    continue;
                 }
+
+                if (isPreviewUrl(url) || (srcIsShort && url.equals(src))) {
+                    stream.skippedPreviews++;
+                    continue;
+                }
+
+                ordered.add(url);
             }
 
             for (String url : ordered) {
                 String lower = url.toLowerCase(Locale.US);
+                int height = srcIsPlayed && url.equals(src) ? playerHeight : 0; // only the played file's size is known
 
                 if (lower.contains(".mp4")) {
-                    stream.candidates.add(new Candidate(url, "MP4", 0));
+                    stream.candidates.add(new Candidate(url, "MP4", height));
                 } else if (lower.contains(".m3u8")) {
                     stream.candidates.add(new Candidate(url, "HLS", 0));
                 } else if (lower.contains(".webm")) {
-                    stream.candidates.add(new Candidate(url, "WebM", 0));
+                    stream.candidates.add(new Candidate(url, "WebM", height));
                 }
             }
 
             for (Candidate c : stream.candidates) {
                 if (c.kind.equals("MP4") && stream.mp4Url == null) {
                     stream.mp4Url = c.url;
+                    stream.mp4Height = c.height;
                 } else if (c.kind.equals("HLS") && stream.hlsUrl == null) {
                     stream.hlsUrl = c.url;
                 } else if (c.kind.equals("WebM") && stream.webmUrl == null) {
                     stream.webmUrl = c.url;
+                    stream.webmHeight = c.height;
                 }
             }
 
             stream.title = textOf(root.optString("title", null));
 
             if (stream.title != null) {
-                stream.title = stream.title.replaceAll("\\s*[|\\-–—]\\s*Rumble.*$", "").trim();
+                stream.title = stream.title.replaceAll("\\s*[|\\-\u2013\u2014]\\s*Rumble.*$", "").trim();
             }
 
             stream.thumb = root.isNull("image") || root.optString("image", "").isEmpty() ? null : root.optString("image");
@@ -567,11 +596,23 @@ public final class RumbleParser {
         return lower.startsWith("http") && (lower.contains(".mp4") || lower.contains(".m3u8") || lower.contains(".webm"));
     }
 
-    /** Short preview clips, sprites and posters that the page loads next to the real video. */
+    /**
+     * Short preview clips, sprites and posters that Rumble keeps next to the real video. Only the address path is
+     * looked at (not the host or query), and such a file is never offered for playback.
+     */
     static boolean isPreviewUrl(String url) {
-        String lower = url == null ? "" : url.toLowerCase(Locale.US);
-        return lower.contains("preview") || lower.contains("thumb") || lower.contains("timeline") || lower.contains("sprite")
-                || lower.contains("storyboard") || lower.contains("poster") || lower.contains(".gif");
+        if (url == null) {
+            return false;
+        }
+
+        String lower = url.toLowerCase(Locale.US);
+        int cut = lower.indexOf('?');
+        String path = cut >= 0 ? lower.substring(0, cut) : lower;
+        int slashes = path.indexOf("//");
+        path = slashes >= 0 && path.indexOf('/', slashes + 2) >= 0 ? path.substring(path.indexOf('/', slashes + 2)) : path;
+
+        return path.contains("preview") || path.contains("thumb") || path.contains("timeline") || path.contains("sprite")
+                || path.contains("storyboard") || path.contains("poster") || path.contains("teaser") || path.endsWith(".gif");
     }
 
     /** Exact answer for one watch page (title, picture, player id), from Rumble's oEmbed service. */
@@ -597,6 +638,11 @@ public final class RumbleParser {
         final List<Object[]> mp4 = new ArrayList<>(); // {height, url}
         final List<Object[]> webm = new ArrayList<>();
         String hls;
+        final int[] skipped;
+
+        MediaScan(int[] skipped) {
+            this.skipped = skipped;
+        }
 
         void visit(String key, Object node) {
             if (node instanceof JSONObject) {
@@ -633,6 +679,11 @@ public final class RumbleParser {
             String lower = value.toLowerCase(Locale.US);
 
             if (!lower.startsWith("http")) {
+                return;
+            }
+
+            if ((lower.contains(".mp4") || lower.contains(".webm") || lower.contains(".m3u8")) && isPreviewUrl(value)) {
+                skipped[0]++;
                 return;
             }
 
@@ -703,7 +754,7 @@ public final class RumbleParser {
      * Picks the highest resolution up to 1080p from {"720": {"url": ...}, "480": {...}} (keys are heights or names).
      */
     /** Variants as {height, url}: tallest up to MAX_HEIGHT first, then taller ones (smallest first), then unknown sizes. */
-    private static List<Object[]> sortedVariants(JSONObject variants) {
+    private static List<Object[]> sortedVariants(JSONObject variants, int[] skipped) {
         List<Object[]> result = new ArrayList<>();
 
         if (variants == null) {
@@ -717,6 +768,11 @@ public final class RumbleParser {
             JSONObject variant = variants.optJSONObject(key);
 
             if (variant == null || variant.isNull("url") || variant.optString("url", "").isEmpty()) {
+                continue;
+            }
+
+            if (isPreviewUrl(variant.optString("url", ""))) { // a preview clip is never the video
+                skipped[0]++;
                 continue;
             }
 
@@ -749,7 +805,7 @@ public final class RumbleParser {
         return result;
     }
 
-    private static Object[] bestVariant(JSONObject variants) {
+    private static Object[] bestVariant(JSONObject variants, int[] skipped) {
         if (variants == null) {
             return null;
         }
@@ -773,6 +829,11 @@ public final class RumbleParser {
             String url = variant.optString("url", null);
 
             if (url == null || url.isEmpty()) {
+                continue;
+            }
+
+            if (isPreviewUrl(url)) {
+                skipped[0]++;
                 continue;
             }
 

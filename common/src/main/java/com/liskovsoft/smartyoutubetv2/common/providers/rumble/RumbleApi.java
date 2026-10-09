@@ -169,16 +169,25 @@ public final class RumbleApi {
             + "  return '';\n"
             + "})()\n";
 
-    /** Runs inside the embed page: lists the media urls the page's player has loaded. Returns "" until there is one. */
-    private static final String PLAYER_SCRIPT = "(function(){var o={src:'',urls:[],title:document.title||'',image:''};"
+    /**
+     * Runs inside the embed page: lists the media urls the page's player has loaded. Returns "" until the player has
+     * loaded the video's own length and picture size (or 10 tries have passed), so a short preview that starts first is
+     * not mistaken for the video.
+     */
+    private static final String PLAYER_SCRIPT = "(function(){var w=window;w.__pp=(w.__pp||0)+1;"
+            + "var o={src:'',urls:[],title:document.title||'',image:'',dur:0,vh:0,vw:0};"
             + "var v=document.querySelector('video');"
-            + "if(v){try{v.muted=true;v.play();}catch(e){}o.src=v.currentSrc||v.src||'';}"
+            + "var inf=false;"
+            + "if(v){try{v.muted=true;v.play();}catch(e){}o.src=v.currentSrc||v.src||'';"
+            + "inf=(v.duration===Infinity);o.dur=isFinite(v.duration)?v.duration:0;o.vh=v.videoHeight||0;o.vw=v.videoWidth||0;}"
             + "var b=document.querySelector('[class*=\"play-button\"],[class*=\"PlayButton\"],[class*=\"big-play\"],button[aria-label*=\"lay\"]');"
             + "if(b){try{b.click();}catch(e){}}"
             + "try{performance.getEntriesByType('resource').forEach(function(r){if(/\\.(mp4|m3u8|webm)(\\?|$)/i.test(r.name)){o.urls.push({u:r.name,s:(r.decodedBodySize||r.encodedBodySize||r.transferSize||0)});}});}catch(e){}"
             + "if(o.src&&o.src.indexOf('blob:')!==0&&!/\\.(mp4|m3u8|webm)(\\?|$)/i.test(o.src)){o.urls.push({u:o.src,s:0});}"
             + "var m=document.querySelector('meta[property=\"og:image\"]');if(m){o.image=m.content;}"
-            + "var good=(o.src&&o.src.indexOf('blob:')!==0)||o.urls.length;"
+            + "var found=(o.src&&o.src.indexOf('blob:')!==0)||o.urls.length;"
+            + "var ready=!!(v&&o.vh>0&&(o.dur>0||inf));"
+            + "var good=found&&(ready||w.__pp>=10);"
             + "if(good&&v){try{v.pause();}catch(e){}}"
             + "return good?JSON.stringify(o):'';})()";
     /** A page with fewer videos than this is the last one. */
@@ -322,12 +331,18 @@ public final class RumbleApi {
      */
     public static RumbleParser.Stream stream(String videoId) throws IOException {
         List<String> ids = embedIdsOf(videoId);
+        RumbleParser.Oembed known = OEMBEDS.get(videoId);
+        long expectedSec = known != null ? known.durationSec : 0;
         StringBuilder problems = new StringBuilder();
         RumbleParser.Stream firstFound = null;
         String mismatch = null;
 
         for (int i = 0; i < ids.size() && i < 3; i++) {
-            RumbleParser.Stream stream = streamOf(ids.get(i), i == 0, problems);
+            RumbleParser.Stream stream = streamOf(ids.get(i), i == 0, problems, expectedSec);
+
+            if (stream != null && stream.durationSec <= 0) {
+                stream.durationSec = expectedSec; // lets the size check know how long the video is
+            }
 
             if (stream == null) {
                 continue;
@@ -378,7 +393,7 @@ public final class RumbleApi {
     }
 
     /** Stream details for one player id: the embed API, and for the first id also the page's own player as a fallback. */
-    private static RumbleParser.Stream streamOf(String embedId, boolean allowPagePlayer, StringBuilder problems) {
+    private static RumbleParser.Stream streamOf(String embedId, boolean allowPagePlayer, StringBuilder problems, long expectedSec) {
         for (String version : new String[]{"u4", "u3"}) {
             try {
                 String json = RumbleHttp.get("/embedJS/" + version + "/?request=video&ver=2&v=" + encode(embedId), SITE + "/embed/" + embedId + "/", true);
@@ -400,7 +415,7 @@ public final class RumbleApi {
 
         // The API refused us: let the embed page's own player fetch the stream, and read it from there
         try {
-            RumbleParser.Stream stream = RumbleParser.parseScrape(BrowserFetcher.scrape(SITE + "/embed/" + embedId + "/", PLAYER_SCRIPT, 25, true));
+            RumbleParser.Stream stream = RumbleParser.parseScrape(BrowserFetcher.scrape(SITE + "/embed/" + embedId + "/", PLAYER_SCRIPT, 25, true), expectedSec);
 
             if (stream != null) {
                 return stream;

@@ -7,6 +7,7 @@ import com.liskovsoft.mediaserviceinterfaces.data.MediaItemMetadata;
 import com.liskovsoft.sharedutils.rx.RxHelper;
 import com.liskovsoft.smartyoutubetv2.common.providers.HostCheck;
 import com.liskovsoft.smartyoutubetv2.common.providers.LocalContentBase;
+import com.liskovsoft.smartyoutubetv2.common.providers.ProviderHttp;
 import com.liskovsoft.smartyoutubetv2.common.providers.ProviderStore;
 import com.liskovsoft.smartyoutubetv2.common.providers.model.ProviderFormatInfo;
 import com.liskovsoft.smartyoutubetv2.common.providers.model.ProviderMediaGroup;
@@ -88,26 +89,24 @@ public class RumbleMediaItemService extends StubMediaItemService {
             }
         }
 
-        java.util.Set<String> unreachable = new java.util.LinkedHashSet<>();
-        RumbleParser.Candidate pick = choose(stream, unreachable);
+        RumbleStreamPicker.Result pick = choose(stream, false);
 
-        if (pick == null) {
-            return ProviderFormatInfo.unplayable(videoId, unreachable.isEmpty() ? "This video can't be played here"
-                    : "This network can't look up Rumble's video server (" + unreachable + "). Check the DNS filter or blocklist.");
+        if (pick.chosen == null) {
+            return ProviderFormatInfo.unplayable(videoId, pick.unreachable.isEmpty() ? "This video can't be played here"
+                    : "This network can't look up Rumble's video server (" + pick.unreachable + "). Check the DNS filter or blocklist.");
         }
-
-        String url = pick.url; // the player reads the type from the file extension
 
         mStore.addToHistory(stream.toMediaItem(videoId));
 
-        return ProviderFormatInfo.playable(videoId, url)
+        return ProviderFormatInfo.playable(videoId, pick.chosen.url) // the player reads the type from the file extension
+                .live(pick.live)
                 .describe(stream.title, stream.authorName, stream.channelId, "Rumble stream: " + stream.describeChoice(), stream.durationSec);
     }
 
     /**
-     * First stream whose server this network can find. Sets what the details line says about it.
+     * Picks the stream (see {@link RumbleStreamPicker}) and sets what the details line says about it.
      */
-    private RumbleParser.Candidate choose(RumbleParser.Stream stream, java.util.Set<String> unreachable) {
+    private RumbleStreamPicker.Result choose(RumbleParser.Stream stream, boolean cardSaysLive) {
         if (stream.candidates.isEmpty()) { // layouts the structured parse did not cover
             if (stream.mp4Url != null) {
                 stream.candidates.add(new RumbleParser.Candidate(stream.mp4Url, "MP4", stream.mp4Height));
@@ -120,18 +119,38 @@ public class RumbleMediaItemService extends StubMediaItemService {
             }
         }
 
-        for (RumbleParser.Candidate candidate : stream.candidates) { // a DNS filter can hide some of Rumble's video servers
-            if (HostCheck.resolves(candidate.url)) {
-                stream.chosen = candidate;
-                stream.stability = "via " + HostCheck.hostOf(candidate.url) + (unreachable.isEmpty() ? "" : " (skipped unreachable: " + unreachable + ")");
-                return candidate;
-            }
+        RumbleStreamPicker.Result result = RumbleStreamPicker.pick(stream, cardSaysLive, NET);
 
-            unreachable.add(HostCheck.hostOf(candidate.url));
+        if (result.chosen != null) {
+            stream.chosen = result.chosen;
+            stream.stability = "via " + HostCheck.hostOf(result.chosen.url)
+                    + (result.unreachable.isEmpty() ? "" : " (skipped unreachable: " + result.unreachable + ")") + result.note;
+            stream.live = result.live;
         }
 
-        return null;
+        return result;
     }
+
+    private static final RumbleStreamPicker.Net NET = new RumbleStreamPicker.Net() {
+        @Override
+        public boolean resolves(String url) {
+            return HostCheck.resolves(url);
+        }
+
+        @Override
+        public long length(String url) {
+            return ProviderHttp.contentLength(url);
+        }
+
+        @Override
+        public String text(String url) {
+            try {
+                return ProviderHttp.get(url);
+            } catch (Exception e) {
+                return null;
+            }
+        }
+    };
 
     // Video details
 
@@ -189,7 +208,8 @@ public class RumbleMediaItemService extends StubMediaItemService {
         ProviderMetadata metadata = new ProviderMetadata();
         metadata.title = stream.title;
         metadata.secondTitle = item.secondTitle;
-        choose(stream, new java.util.LinkedHashSet<String>());
+        choose(stream, false);
+        metadata.live = stream.live;
         metadata.description = "Rumble stream: " + stream.describeChoice();
         RumbleParser.Oembed oembed = RumbleApi.oembedFor(videoId);
 

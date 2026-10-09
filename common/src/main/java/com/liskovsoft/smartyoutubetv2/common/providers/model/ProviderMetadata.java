@@ -25,6 +25,7 @@ public class ProviderMetadata implements MediaItemMetadata {
     public String channelId;
     public boolean subscribed;
     public long durationMs;
+    public boolean live;
     public MediaItem nextVideo;
     public final List<MediaGroup> suggestions = new ArrayList<>();
 
@@ -100,7 +101,7 @@ public class ProviderMetadata implements MediaItemMetadata {
 
     @Override
     public boolean isLive() {
-        return false;
+        return live;
     }
 
     @Override

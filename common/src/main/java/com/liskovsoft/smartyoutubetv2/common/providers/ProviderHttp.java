@@ -68,6 +68,41 @@ public final class ProviderHttp {
         }
     }
 
+    /**
+     * Size of the file behind the url in bytes (asks for one byte and reads the total), or -1 when the server doesn't say.
+     */
+    public static long contentLength(String url) {
+        Response response = null;
+
+        try {
+            Map<String, String> headers = headers(null);
+            headers.put("Range", "bytes=0-0");
+            response = OkHttpManager.instance().doGetRequest(url, headers);
+
+            if (response == null) {
+                return -1;
+            }
+
+            String range = response.header("Content-Range"); // "bytes 0-0/12345"
+
+            if (response.code() == 206 && range != null && range.contains("/")) {
+                try {
+                    return Long.parseLong(range.substring(range.lastIndexOf('/') + 1).trim());
+                } catch (NumberFormatException e) {
+                    return -1;
+                }
+            }
+
+            return response.code() == 200 && response.body() != null ? response.body().contentLength() : -1;
+        } catch (RuntimeException e) {
+            return -1;
+        } finally {
+            if (response != null && response.body() != null) {
+                response.body().close();
+            }
+        }
+    }
+
     private static String execute(Response response, String url) throws IOException {
         if (response == null) {
             throw new IOException("No response from " + url);
