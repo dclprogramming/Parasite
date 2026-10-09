@@ -54,8 +54,8 @@
     <dimen name="lb_browse_rows_margin_top">130dp</dimen>
 
     <!-- Increase this value to hide left strip from Browse fragment (when headers collapsed) -->
-    <!-- Old value: 238dp -->
-    <dimen name="lb_browse_rows_margin_start">205dp</dimen>
+    <!-- Old value: 238dp. Parasite: equal to lb_browse_headers_width, because Leanback slides the sidebar out by exactly this much; a smaller value left a strip of it on screen -->
+    <dimen name="lb_browse_rows_margin_start">230dp</dimen>
 
     <!-- Parasite: narrower sidebar (library default: 270dp). Was 210dp, +20 -->
     <dimen name="lb_browse_headers_width">230dp</dimen>

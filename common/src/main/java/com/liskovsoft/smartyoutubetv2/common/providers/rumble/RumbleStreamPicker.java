@@ -68,9 +68,20 @@ final class RumbleStreamPicker {
             }
         }
 
-        // A live stream is only playable as HLS; a file that is only 240p or smaller loses to adaptive HLS
-        if (hasHls && (liveHint || (topFile != null && topFile.height > 0 && topFile.height < 360))) {
-            moveHlsFirst(list);
+        // A live stream is only playable as HLS; a file that is only 240p or smaller loses to adaptive HLS.
+        // A file is one quality only, while HLS lists every size so the player's quality menu can offer them all:
+        // HLS goes first whenever it offers several sizes and none of them is smaller than the best file.
+        int hlsMax = 0;
+
+        if (hasHls) {
+            RumbleParser.Candidate hls = firstHls(list);
+            int[] sizes = hlsSizes(hls.url, net); // {renditions, tallest}
+            hlsMax = sizes[1];
+
+            if (liveHint || (topFile != null && topFile.height > 0 && topFile.height < 360)
+                    || (sizes[0] >= 2 && (topFile == null || hlsMax >= topFile.height))) {
+                moveHlsFirst(list);
+            }
         }
 
         int probes = 0;
@@ -117,6 +128,11 @@ final class RumbleStreamPicker {
         for (RumbleParser.Candidate c : list) {
             if (c.kind.equals("HLS")) {
                 result.chosen = c;
+
+                if (hlsMax > 0 && !liveHint) {
+                    result.note += " (sizes up to " + hlsMax + "p)";
+                }
+
                 break;
             }
 
@@ -157,6 +173,39 @@ final class RumbleStreamPicker {
 
         result.live = decideLive(stream, liveHint, result.chosen, net);
         return result;
+    }
+
+    private static RumbleParser.Candidate firstHls(List<RumbleParser.Candidate> list) {
+        for (RumbleParser.Candidate c : list) {
+            if (c.kind.equals("HLS")) {
+                return c;
+            }
+        }
+
+        return null;
+    }
+
+    /** {number of picture sizes, tallest size} listed by an HLS master playlist; zeros when it can't be read. */
+    static int[] hlsSizes(String url, Net net) {
+        int count = 0;
+        int tallest = 0;
+
+        try {
+            String text = net.text(url);
+
+            if (text != null) {
+                java.util.regex.Matcher m = java.util.regex.Pattern.compile("RESOLUTION=(\\d+)x(\\d+)").matcher(text);
+
+                while (m.find()) {
+                    count++;
+                    tallest = Math.max(tallest, Integer.parseInt(m.group(2)));
+                }
+            }
+        } catch (Exception e) {
+            // unreadable: no preference
+        }
+
+        return new int[]{count, tallest};
     }
 
     private static void moveHlsFirst(List<RumbleParser.Candidate> list) {

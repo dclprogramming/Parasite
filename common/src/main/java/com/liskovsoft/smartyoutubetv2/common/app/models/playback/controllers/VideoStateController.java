@@ -10,6 +10,7 @@ import com.liskovsoft.smartyoutubetv2.common.app.models.playback.BasePlayerContr
 import com.liskovsoft.smartyoutubetv2.common.app.models.playback.manager.PlayerUI;
 import com.liskovsoft.smartyoutubetv2.common.app.models.playback.service.VideoStateService.State;
 import com.liskovsoft.smartyoutubetv2.common.app.presenters.AppDialogPresenter;
+import com.liskovsoft.smartyoutubetv2.common.exoplayer.selector.ExoFormatItem;
 import com.liskovsoft.smartyoutubetv2.common.exoplayer.selector.FormatItem;
 import com.liskovsoft.smartyoutubetv2.common.misc.MediaServiceManager;
 import com.liskovsoft.smartyoutubetv2.common.misc.ScreensaverManager;
@@ -453,6 +454,9 @@ public class VideoStateController extends BasePlayerController {
 
         if (getPlayerData().getTempVideoFormat() != null) {
             getPlayer().setFormat(getPlayerData().getTempVideoFormat());
+        } else if (ProviderData.getSelected() != ProviderData.YOUTUBE) {
+            // Rumble / Odysee: start at the best size the video has (the quality menu can still lower it)
+            getPlayer().setFormat(ExoFormatItem.fromVideoSpec("3840,2160,60,avc", true));
         } else {
             getPlayer().setFormat(getPlayerData().getFormat(FormatItem.TYPE_VIDEO));
         }
