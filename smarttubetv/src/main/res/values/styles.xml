@@ -22,9 +22,9 @@
     <!-- Decrease header spacing in BrowseView -->
     <style name="BrowseHeaderStyle" parent="Widget.Leanback.Headers.VerticalGridView">
         <item name="android:verticalSpacing">@dimen/browse_headers_vertical_spacing</item>
-        <!-- Parasite: equal left/right padding (22+39+169dp = sidebar width) so entries sit centred in the sidebar -->
+        <!-- Parasite: 22dp start/end padding around the 169dp entries -->
         <item name="android:paddingStart">22dp</item>
-        <item name="android:paddingEnd">39dp</item>
+        <item name="android:paddingEnd">22dp</item>
     </style>
 
     <!-- Color scheme: Teal (Default) -->

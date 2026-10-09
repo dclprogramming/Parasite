@@ -60,7 +60,7 @@
     <!-- Parasite: narrower sidebar (library default: 270dp). Was 210dp, +20 -->
     <dimen name="lb_browse_headers_width">230dp</dimen>
 
-    <!-- Parasite: fixed width of every sidebar entry = sidebar width minus BrowseHeaderStyle padding (22dp start + 39dp end) -->
+    <!-- Parasite: fixed width of every sidebar entry = sidebar width minus BrowseHeaderStyle padding (22dp start + 22dp end) -->
     <dimen name="header_item_width">169dp</dimen>
     <!-- Parasite: fixed height of every sidebar entry and its focus/selected background, so it never changes between states -->
     <dimen name="header_item_height">46dp</dimen>
