@@ -109,36 +109,12 @@ final class RumbleDebug {
         show("Rumble check (photograph this screen)", text.toString());
     }
 
+    /** Diagnostics are written to the log only; no dialog or message is shown on screen. */
     private static void show(String title, String text) {
-        Log.w(TAG, text);
-        Context context = ProviderData.getAppContext();
-
-        if (context == null) {
-            return;
-        }
-
-        new Handler(Looper.getMainLooper()).post(() -> {
-            try {
-                com.liskovsoft.smartyoutubetv2.common.app.presenters.AppDialogPresenter dialog =
-                        com.liskovsoft.smartyoutubetv2.common.app.presenters.AppDialogPresenter.instance(context);
-                dialog.appendLongTextCategory(title, com.liskovsoft.smartyoutubetv2.common.app.models.playback.ui.UiOptionItem.from(text));
-                dialog.showDialog(title);
-            } catch (RuntimeException e) {
-                MessageHelpers.showLongMessage(context, title + ": " + (text.length() > 200 ? text.substring(0, 200) : text));
-            }
-        });
+        Log.w(TAG, title + ": " + text);
     }
 
     private static void report(String message) {
         Log.w(TAG, message);
-
-        Context context = ProviderData.getAppContext();
-
-        if (context == null || sReports >= 3) {
-            return;
-        }
-
-        sReports++;
-        new Handler(Looper.getMainLooper()).post(() -> MessageHelpers.showLongMessage(context, message));
     }
 }
