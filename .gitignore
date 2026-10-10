@@ -76,3 +76,7 @@ keystore.properties
 *.jks
 *.keystore
 *.p12
+*.pfx
+*.pem
+parasite-release.*
+.env
