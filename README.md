@@ -1,7 +1,7 @@
 # Parasite (hardened, restyled fork of SmartTube)
 
-A YouTube client for Android TV / Google TV, forked from [SmartTube](https://github.com/yuliskov/SmartTube)
-(MIT licence, see `LICENSE`) after the original project's signing key and release builds were compromised.
+A YouTube/Rumble/Odysee client for Android TV / Google TV, forked from [SmartTube](https://github.com/yuliskov/SmartTube)
+(MIT licence, see `LICENSE`).
 Everything needed to build is in this repository (the two former git submodules, `MediaServiceCore` and
 `SharedModules`, are vendored as plain folders), so nothing is fetched from the original author's repos.
 
