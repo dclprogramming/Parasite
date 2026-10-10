@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/parasite_icon.png" width="96" alt="Parasite icon"></p>
+
 # Parasite (hardened, restyled fork of SmartTube)
 
 A YouTube/Rumble/Odysee client for Android TV / Google TV, forked from [SmartTube](https://github.com/yuliskov/SmartTube)
