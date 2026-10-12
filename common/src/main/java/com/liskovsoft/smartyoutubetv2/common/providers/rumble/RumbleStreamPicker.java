@@ -79,7 +79,9 @@ final class RumbleStreamPicker {
             hlsMax = sizes[1];
 
             if (liveHint || (topFile != null && topFile.height > 0 && topFile.height < 360)
-                    || (sizes[0] >= 2 && (topFile == null || hlsMax >= topFile.height))) {
+                    || (sizes[0] >= 2 && (topFile == null || hlsMax == 0 || hlsMax >= topFile.height))
+                    // HLS lists every size (up to 2160p) in the player's quality menu; a lone file is stuck at one size
+                    || (sizes[0] >= 2 && topFile.height <= 720)) {
                 moveHlsFirst(list);
             }
         }
@@ -238,6 +240,14 @@ final class RumbleStreamPicker {
                 while (m.find()) {
                     count++;
                     tallest = Math.max(tallest, Integer.parseInt(m.group(2)));
+                }
+
+                if (count == 0) { // sizes not written out: count the listed streams instead
+                    java.util.regex.Matcher streams = java.util.regex.Pattern.compile("#EXT-X-STREAM-INF").matcher(text);
+
+                    while (streams.find()) {
+                        count++;
+                    }
                 }
             }
         } catch (Exception e) {

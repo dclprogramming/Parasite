@@ -190,6 +190,18 @@ public final class RumbleApi {
             + "var good=found&&(ready||w.__pp>=10);"
             + "if(good&&v){try{v.pause();}catch(e){}}"
             + "return good?JSON.stringify(o):'';})()";
+    /**
+     * Runs inside a page that lists channels (not videos): scrolls until the list stops growing, then returns the
+     * page markup so the channel links can be read from it.
+     */
+    private static final String CHANNELS_SCRIPT = "(function(){var w=window;w.__cp=(w.__cp||0)+1;"
+            + "if(/just a moment|attention required/i.test(document.title||'')) return '';"
+            + "var n=document.querySelectorAll('a[href^=\\\"/c/\\\"],a[href^=\\\"/user/\\\"]').length;"
+            + "try{window.scrollTo(0,document.body.scrollHeight);}catch(e){}"
+            + "var same=(w.__cn===n);w.__cs=same?((w.__cs||0)+1):0;w.__cn=n;"
+            + "if((n>0&&w.__cs>=3)||w.__cp>=14){return n>0?document.documentElement.outerHTML:'<html></html>';}"
+            + "return '';})()";
+
     /** A page with fewer videos than this is the last one. */
     public static final int MIN_FULL_PAGE = 8;
 
@@ -303,6 +315,30 @@ public final class RumbleApi {
         }
 
         return entries;
+    }
+
+    /**
+     * Channels the signed-in account follows, read from a page that lists them (as opposed to the video feed, which
+     * only shows channels that posted lately). Empty when no such page could be read.
+     */
+    public static List<ProviderMediaItem> followedChannelsSignedIn() {
+        java.util.Map<String, ProviderMediaItem> found = new java.util.LinkedHashMap<>();
+
+        for (String path : new String[]{"/subscriptions/channels", "/account/subscriptions", "/account/following"}) {
+            try {
+                String html = BrowserFetcher.scrape(SITE + path, CHANNELS_SCRIPT, 25, false);
+
+                for (ProviderMediaItem channel : RumbleParser.parseChannels(html)) {
+                    if (channel.channelId != null && !found.containsKey(channel.channelId)) {
+                        found.put(channel.channelId, channel);
+                    }
+                }
+            } catch (IOException e) {
+                // try the next page
+            }
+        }
+
+        return new java.util.ArrayList<>(found.values());
     }
 
     /**

@@ -23,7 +23,7 @@ import java.util.concurrent.Callable;
  */
 public class RumbleContentService extends LocalContentBase {
     private static final long FEED_BUDGET_MS = 25000;
-    private static final int MAX_SYNC_PAGES = 12;
+    private static final int MAX_SYNC_PAGES = 40;
     private static final int MAX_FEED_CHANNELS = 4; // every followed channel is one rendered page
 
     private static class Row {
@@ -195,22 +195,34 @@ public class RumbleContentService extends LocalContentBase {
         }
 
         try {
-            // One page of the subscription feed shows only the channels that posted lately, so read several pages
-            // until a page brings no new channel
             java.util.Set<String> seen = new java.util.HashSet<>();
 
-            for (int page = 1; page <= MAX_SYNC_PAGES; page++) {
-                int before = seen.size();
+            // 1) A page that lists every followed channel (the feed below only shows channels that posted lately)
+            for (ProviderMediaItem channel : RumbleApi.followedChannelsSignedIn()) {
+                if (seen.add(channel.channelId)) {
+                    mStore.follow(channel);
+                }
+            }
 
-                for (RumbleParser.Entry entry : RumbleApi.listingSignedIn("/subscriptions", page)) {
+            // 2) The feed: one page shows only a few channels, so read many pages and stop only after
+            // several pages in a row bring nothing new
+            int quiet = 0;
+
+            for (int page = 1; page <= MAX_SYNC_PAGES && quiet < 3; page++) {
+                int before = seen.size();
+                List<RumbleParser.Entry> entries = RumbleApi.listingSignedIn("/subscriptions", page);
+
+                if (entries.isEmpty()) {
+                    break;
+                }
+
+                for (RumbleParser.Entry entry : entries) {
                     if (entry.channelId != null && seen.add(entry.channelId)) {
                         mStore.follow(ProviderMediaItem.channel(entry.channelId, entry.channelName, entry.channelThumb));
                     }
                 }
 
-                if (seen.size() == before) {
-                    break;
-                }
+                quiet = seen.size() == before ? quiet + 1 : 0;
             }
 
             synchronized (RumbleContentService.class) {

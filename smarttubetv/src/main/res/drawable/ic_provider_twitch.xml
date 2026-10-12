@@ -4,6 +4,11 @@
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
+    <!-- White inside of the speech bubble (the outline below leaves it empty) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M6.857 1.714h13.714v9.429l-3.428 3.428h-3.429l-3 3v-3H6.857z" />
+    <!-- Purple outline and the two eyes -->
     <path
         android:fillColor="#9146FF"
         android:fillType="evenOdd"
