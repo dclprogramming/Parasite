@@ -132,6 +132,8 @@ public class RumbleMediaItemService extends StubMediaItemService {
         return result;
     }
 
+    private static final java.util.Map<String, Object[]> TEXTS = new java.util.concurrent.ConcurrentHashMap<>();
+
     private static final RumbleStreamPicker.Net NET = new RumbleStreamPicker.Net() {
         @Override
         public boolean resolves(String url) {
@@ -145,6 +147,22 @@ public class RumbleMediaItemService extends StubMediaItemService {
 
         @Override
         public String text(String url) {
+            Object[] cached = TEXTS.get(url);
+
+            if (cached != null && System.currentTimeMillis() - (Long) cached[0] < 2 * 60 * 1000) {
+                return (String) cached[1]; // the same playlist is read several times while choosing
+            }
+
+            String text = fetchText(url);
+
+            if (text != null) {
+                TEXTS.put(url, new Object[]{System.currentTimeMillis(), text});
+            }
+
+            return text;
+        }
+
+        private String fetchText(String url) {
             try {
                 java.util.Map<String, String> headers = new java.util.HashMap<>();
                 headers.put("Referer", "https://rumble.com/");

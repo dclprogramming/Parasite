@@ -366,6 +366,21 @@ public final class RumbleApi {
      * against the title the card showed, so a wrong guess never plays a different video unnoticed.
      */
     public static RumbleParser.Stream stream(String videoId) throws IOException {
+        Object[] cached = STREAMS.get(videoId);
+
+        if (cached != null && System.currentTimeMillis() - (Long) cached[0] < STREAM_CACHE_MS) {
+            return (RumbleParser.Stream) cached[1]; // playback info and details both ask: do the work once
+        }
+
+        RumbleParser.Stream stream = streamUncached(videoId);
+        STREAMS.put(videoId, new Object[]{System.currentTimeMillis(), stream});
+        return stream;
+    }
+
+    private static final long STREAM_CACHE_MS = 3 * 60 * 1000;
+    private static final java.util.Map<String, Object[]> STREAMS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private static RumbleParser.Stream streamUncached(String videoId) throws IOException {
         List<String> ids = embedIdsOf(videoId);
         RumbleParser.Oembed known = OEMBEDS.get(videoId);
         long expectedSec = known != null ? known.durationSec : 0;
@@ -404,6 +419,10 @@ public final class RumbleApi {
         throw new IOException(problems.length() > 0 ? problems.toString() : "no player id found");
     }
 
+    /** Same as the player script, but done as soon as the page's player has asked for a playlist. */
+    private static final String PLAYER_HLS_SCRIPT = PLAYER_SCRIPT.replace("var good=found&&(ready||w.__pp>=10);",
+            "var hasList=o.urls.some(function(x){return /\\.m3u8/i.test(x.u);});var good=found&&(ready||w.__pp>=10||hasList);");
+
     private static final java.util.Map<String, List<String>> PLAYER_HLS = new java.util.concurrent.ConcurrentHashMap<>();
     private static final java.util.Set<String> PLAYER_HLS_TRIED = java.util.Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap<String, Boolean>());
 
@@ -434,7 +453,7 @@ public final class RumbleApi {
             found = new java.util.ArrayList<>();
 
             try {
-                RumbleParser.Stream seen = RumbleParser.parseScrape(BrowserFetcher.scrape(SITE + "/embed/" + embedId + "/", PLAYER_SCRIPT, 25, true), expectedSec);
+                RumbleParser.Stream seen = RumbleParser.parseScrape(BrowserFetcher.scrape(SITE + "/embed/" + embedId + "/", PLAYER_HLS_SCRIPT, 15, true), expectedSec);
 
                 if (seen != null) {
                     for (RumbleParser.Candidate c : seen.candidates) {
