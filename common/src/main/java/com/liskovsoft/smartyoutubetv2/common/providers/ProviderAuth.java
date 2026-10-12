@@ -29,6 +29,14 @@ public final class ProviderAuth {
         prefs(context).edit().putBoolean("signed_" + provider, signedIn).commit();
     }
 
+    public static String getTwitchToken(Context context) {
+        return context != null ? prefs(context).getString("twitch_token", null) : null;
+    }
+
+    public static void setTwitchToken(Context context, String token) {
+        prefs(context).edit().putString("twitch_token", token).commit();
+    }
+
     public static String siteOf(int provider) {
         return provider == ProviderData.RUMBLE ? RUMBLE_SITE : TWITCH_SITE;
     }
@@ -59,6 +67,10 @@ public final class ProviderAuth {
      */
     public static void signOut(Context context, int provider) {
         setSignedIn(context, provider, false);
+
+        if (provider == ProviderData.TWITCH) {
+            setTwitchToken(context, null);
+        }
 
         String site = siteOf(provider);
         CookieManager cookies = CookieManager.getInstance();

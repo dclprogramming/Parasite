@@ -112,7 +112,7 @@ public final class ProviderHttp {
             ResponseBody body = response.body();
 
             if (!response.isSuccessful() || body == null) {
-                throw new HttpStatusException(response.code(), url);
+                throw new HttpStatusException(response.code(), url, errorText(body));
             }
 
             return body.string();
@@ -120,6 +120,16 @@ public final class ProviderHttp {
             if (response.body() != null) {
                 response.body().close();
             }
+        }
+    }
+
+    /** The first part of an error response, or null. Servers often say what was wrong with the request. */
+    private static String errorText(ResponseBody body) {
+        try {
+            String text = body != null ? body.string().trim() : null;
+            return text != null && text.length() > 300 ? text.substring(0, 300) : text;
+        } catch (IOException | RuntimeException e) {
+            return null;
         }
     }
 

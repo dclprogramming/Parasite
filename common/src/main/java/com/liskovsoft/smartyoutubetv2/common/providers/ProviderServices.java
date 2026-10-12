@@ -37,6 +37,7 @@ public final class ProviderServices {
 
         if (provider == ProviderData.TWITCH && context != null) {
             ProviderStore store = new ProviderStore(context, "twitch");
+            com.liskovsoft.smartyoutubetv2.common.providers.twitch.TwitchApi.setAuthToken(ProviderAuth.getTwitchToken(context));
             return new ProviderServiceManager(new TwitchContentService(store), new TwitchMediaItemService(store));
         }
 

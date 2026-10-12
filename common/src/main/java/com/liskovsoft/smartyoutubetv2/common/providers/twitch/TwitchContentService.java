@@ -38,7 +38,7 @@ public class TwitchContentService extends LocalContentBase {
         return RxHelper.fromCallable(() -> {
             List<Callable<ProviderMediaGroup>> tasks = new ArrayList<>();
             tasks.add(() -> streamsPage(MediaGroup.TYPE_HOME, "Live now", null, null));
-            addGameRows(tasks, MediaGroup.TYPE_HOME, HOME_GAMES);
+            addGameRowsIfPossible(tasks, MediaGroup.TYPE_HOME, HOME_GAMES);
             return runParallel(tasks);
         });
     }
@@ -64,6 +64,15 @@ public class TwitchContentService extends LocalContentBase {
     private void addGameRows(List<Callable<ProviderMediaGroup>> tasks, int type, int count) throws IOException {
         for (TwitchApi.Game game : TwitchApi.topGames(count)) {
             tasks.add(() -> streamsPage(type, game.displayName, game.name, null));
+        }
+    }
+
+    /** Category rows are a bonus on Home: if they can't be loaded, the live list is still shown. */
+    private void addGameRowsIfPossible(List<Callable<ProviderMediaGroup>> tasks, int type, int count) {
+        try {
+            addGameRows(tasks, type, count);
+        } catch (IOException e) {
+            // NOP
         }
     }
 

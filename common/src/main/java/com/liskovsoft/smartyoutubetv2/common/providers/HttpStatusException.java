@@ -7,9 +7,16 @@ import java.io.IOException;
  */
 public class HttpStatusException extends IOException {
     public final int code;
+    /** Start of the error page / JSON the server sent with the status. May be null. */
+    public final String body;
 
     public HttpStatusException(int code, String url) {
-        super("HTTP " + code + " from " + url);
+        this(code, url, null);
+    }
+
+    public HttpStatusException(int code, String url, String body) {
+        super("HTTP " + code + " from " + url + (body != null && !body.isEmpty() ? ": " + body : ""));
         this.code = code;
+        this.body = body;
     }
 }

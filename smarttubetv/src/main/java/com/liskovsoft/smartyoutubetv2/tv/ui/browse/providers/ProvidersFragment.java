@@ -174,7 +174,7 @@ public class ProvidersFragment extends Fragment implements BrowseSupportFragment
 
         int provider = ProviderData.getSelected(getContext());
 
-        if (provider == ProviderData.YOUTUBE || provider == ProviderData.TWITCH) { // Twitch needs no sign-in here
+        if (provider == ProviderData.YOUTUBE) {
             mAccountButton.setVisibility(View.GONE);
             return;
         }

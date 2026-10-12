@@ -13,6 +13,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import com.liskovsoft.sharedutils.helpers.MessageHelpers;
 import com.liskovsoft.smartyoutubetv2.common.prefs.ProviderData;
 import com.liskovsoft.smartyoutubetv2.common.providers.rumble.RumbleApi;
+import com.liskovsoft.smartyoutubetv2.common.providers.twitch.TwitchAccount;
+import com.liskovsoft.smartyoutubetv2.common.providers.twitch.TwitchApi;
 
 /**
  * Sign in / sign out for the active non-YouTube provider.
@@ -45,18 +47,13 @@ public final class ProviderLogin {
     }
 
     /**
-     * The sign-in icon at the top of the app, for Rumble: opens its sign-in page, or (when already signed
-     * in) offers to sign out. Twitch has no sign-in here.
+     * The sign-in icon at the top of the app, for Rumble / Twitch: opens their sign-in page, or (when already
+     * signed in) offers to sign out.
      */
     public static void onTopIconClicked(Context context) {
         int provider = ProviderData.getSelected();
 
         if (provider == ProviderData.YOUTUBE) {
-            return;
-        }
-
-        if (provider == ProviderData.TWITCH) {
-            MessageHelpers.showMessage(context, "Twitch needs no sign-in here. Channels you follow are saved on this device.");
             return;
         }
 
@@ -88,7 +85,7 @@ public final class ProviderLogin {
     public static void start(Context context, Runnable onChanged) {
         int provider = ProviderData.getSelected();
 
-        if (provider == ProviderData.YOUTUBE || provider == ProviderData.TWITCH) {
+        if (provider == ProviderData.YOUTUBE) {
             return;
         }
 
@@ -104,6 +101,11 @@ public final class ProviderLogin {
     public static void signOut(Context context, Runnable onChanged) {
         int provider = ProviderData.getSelected();
         ProviderAuth.signOut(context, provider);
+
+        if (provider == ProviderData.TWITCH) {
+            TwitchApi.setAuthToken(null);
+        }
+
         MessageHelpers.showMessage(context, "Signed out of " + nameOf(provider));
         notifying(onChanged).run();
     }
@@ -113,7 +115,7 @@ public final class ProviderLogin {
             String message;
 
             try {
-                message = finishRumble(context, finalUrl);
+                message = provider == ProviderData.TWITCH ? finishTwitch(context) : finishRumble(context, finalUrl);
             } catch (Exception e) {
                 message = nameOf(provider) + ": could not check the sign-in (" + e.getMessage() + ")";
             }
@@ -128,6 +130,49 @@ public final class ProviderLogin {
                 }
             });
         }).start();
+    }
+
+    private static String finishTwitch(Context context) throws Exception {
+        String token = twitchToken();
+
+        if (token == null) {
+            ProviderAuth.setSignedIn(context, ProviderData.TWITCH, false);
+            return "Twitch sign-in not detected. Sign in on the page, then press Back.";
+        }
+
+        ProviderAuth.setTwitchToken(context, token);
+        ProviderAuth.setSignedIn(context, ProviderData.TWITCH, true);
+        TwitchApi.setAuthToken(token);
+
+        try {
+            int count = TwitchAccount.importFollows(new ProviderStore(context, "twitch"));
+            return "Signed in to Twitch. Imported " + count + " followed channels.";
+        } catch (Exception e) {
+            return "Signed in to Twitch, but your followed channels could not be loaded (" + e.getMessage() + ")";
+        }
+    }
+
+    /** The login token of twitch.tv from the browser cookies: its own cookie, or the one inside the "twilight-user" cookie. */
+    private static String twitchToken() {
+        String token = ProviderAuth.cookie(ProviderAuth.TWITCH_SITE, "auth-token");
+
+        if (token != null) {
+            return token;
+        }
+
+        try {
+            String user = ProviderAuth.cookie(ProviderAuth.TWITCH_SITE, "twilight-user");
+
+            if (user != null) {
+                String json = java.net.URLDecoder.decode(user, "UTF-8");
+                String value = new org.json.JSONObject(json).optString("authToken", null);
+                return value != null && !value.isEmpty() ? value : null;
+            }
+        } catch (Exception e) {
+            // NOP
+        }
+
+        return null;
     }
 
     private static String finishRumble(Context context, String finalUrl) throws Exception {

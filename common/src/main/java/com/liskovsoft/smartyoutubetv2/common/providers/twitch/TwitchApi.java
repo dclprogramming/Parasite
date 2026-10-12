@@ -1,6 +1,7 @@
 package com.liskovsoft.smartyoutubetv2.common.providers.twitch;
 
 import com.liskovsoft.sharedutils.mylogger.Log;
+import com.liskovsoft.smartyoutubetv2.common.providers.HttpStatusException;
 import com.liskovsoft.smartyoutubetv2.common.providers.ProviderHttp;
 import com.liskovsoft.smartyoutubetv2.common.providers.model.ProviderMediaItem;
 
@@ -53,7 +54,7 @@ public final class TwitchApi {
     private static final String STREAM_FIELDS = "id title viewersCount createdAt "
             + "previewImageURL(width: 640, height: 360) "
             + "broadcaster { login displayName profileImageURL(width: 150) } "
-            + "game { displayName }";
+            + "game { name displayName }";
     private static final String USER_FIELDS = "login displayName description profileImageURL(width: 150) "
             + "stream { " + STREAM_FIELDS + " }";
     private static final String VIDEO_FIELDS = "id title lengthSeconds publishedAt viewCount "
@@ -67,7 +68,31 @@ public final class TwitchApi {
             + "videoPlaybackAccessToken(id: $vodID, params: {platform: \"web\", playerBackend: \"mediaplayer\", "
             + "playerType: $playerType}) @include(if: $isVod) { value signature __typename } }";
 
+    private static volatile String sAuthToken;
+    private static volatile List<Game> sSeenGames = new ArrayList<>();
+
     private TwitchApi() {
+    }
+
+    /** The signed-in account's OAuth token, or null when signed out. */
+    public static void setAuthToken(String token) {
+        sAuthToken = token != null && !token.isEmpty() ? token : null;
+    }
+
+    public static boolean isSignedIn() {
+        return sAuthToken != null;
+    }
+
+    private static Map<String, String> headers() {
+        String token = sAuthToken;
+
+        if (token == null) {
+            return HEADERS;
+        }
+
+        Map<String, String> headers = new HashMap<>(HEADERS);
+        headers.put("Authorization", "OAuth " + token);
+        return headers;
     }
 
     // Models
@@ -112,14 +137,27 @@ public final class TwitchApi {
     // Lists
 
     public static Page topStreams(String after) throws IOException {
-        JSONObject data = query("query { streams(first: " + PAGE_SIZE + ", options: {sort: VIEWER_COUNT}"
-                + afterArg(after) + ") { edges { cursor node { " + STREAM_FIELDS + " } } } }");
+        JSONObject data = query("query { streams(first: " + PAGE_SIZE + afterArg(after) + ") { edges { cursor node { " + STREAM_FIELDS + " } } } }");
         return streamPage(data.optJSONObject("streams"));
     }
 
+    /**
+     * The busiest categories. If Twitch refuses the categories query, the categories of the most watched streams are
+     * used instead, so the Home and Gaming rows still appear.
+     */
     public static List<Game> topGames(int count) throws IOException {
-        JSONObject data = query("query { games(first: " + count + ", options: {sort: VIEWER_COUNT}) "
-                + "{ edges { node { name displayName } } } }");
+        try {
+            return loadTopGames(count);
+        } catch (IOException e) {
+            Log.e(TAG, "Categories query failed, using the live list instead: " + e.getMessage());
+            topStreams(null);
+            List<Game> seen = sSeenGames;
+            return seen.subList(0, Math.min(count, seen.size()));
+        }
+    }
+
+    private static List<Game> loadTopGames(int count) throws IOException {
+        JSONObject data = query("query { games(first: " + count + ") { edges { node { name displayName } } } }");
         List<Game> games = new ArrayList<>();
         JSONArray edges = edgesOf(data.optJSONObject("games"));
 
@@ -139,7 +177,7 @@ public final class TwitchApi {
 
     public static Page gameStreams(String gameName, String after) throws IOException {
         JSONObject data = query("query { game(name: " + q(gameName) + ") { streams(first: " + PAGE_SIZE
-                + ", options: {sort: VIEWER_COUNT}" + afterArg(after) + ") { edges { cursor node { " + STREAM_FIELDS + " } } } } }");
+                + afterArg(after) + ") { edges { cursor node { " + STREAM_FIELDS + " } } } } }");
         JSONObject game = data.optJSONObject("game");
         return streamPage(game != null ? game.optJSONObject("streams") : null);
     }
@@ -150,7 +188,7 @@ public final class TwitchApi {
      */
     public static Page videos(String login, String type, String after) throws IOException {
         JSONObject data = query("query { user(login: " + q(login) + ") { videos(first: " + PAGE_SIZE + ", type: " + type
-                + ", sort: TIME" + afterArg(after) + ") { edges { cursor node { " + VIDEO_FIELDS + " } } } } }");
+                + afterArg(after) + ") { edges { cursor node { " + VIDEO_FIELDS + " } } } } }");
         JSONObject user = data.optJSONObject("user");
         JSONObject videos = user != null ? user.optJSONObject("videos") : null;
         Page page = new Page();
@@ -204,6 +242,42 @@ public final class TwitchApi {
         }
 
         return result;
+    }
+
+    /**
+     * Logins of the channels the signed-in account follows (up to 300).
+     */
+    public static List<String> followedLogins() throws IOException {
+        List<String> logins = new ArrayList<>();
+        String after = null;
+
+        for (int page = 0; page < 3; page++) {
+            JSONObject data = query("query { currentUser { login follows(first: 100" + afterArg(after)
+                    + ") { edges { cursor node { login } } } } }");
+            JSONObject me = data.optJSONObject("currentUser");
+
+            if (me == null) {
+                throw new IOException("Twitch did not accept the sign-in. Sign in again.");
+            }
+
+            JSONArray edges = edgesOf(me.optJSONObject("follows"));
+
+            for (int i = 0; i < edges.length(); i++) {
+                JSONObject edge = edges.optJSONObject(i);
+                JSONObject node = edge != null ? edge.optJSONObject("node") : null;
+
+                if (node != null && str(node, "login") != null) {
+                    logins.add(str(node, "login").toLowerCase(Locale.US));
+                    after = str(edge, "cursor");
+                }
+            }
+
+            if (edges.length() < 100) {
+                break;
+            }
+        }
+
+        return logins;
     }
 
     public static Vod vod(String id) throws IOException {
@@ -322,7 +396,7 @@ public final class TwitchApi {
                 body.put("variables", variables);
             }
 
-            JSONObject root = new JSONObject(ProviderHttp.postJson(GQL_URL, body.toString(), HEADERS));
+            JSONObject root = new JSONObject(ProviderHttp.postJson(GQL_URL, body.toString(), headers()));
             JSONObject data = root.optJSONObject("data");
             JSONArray errors = root.optJSONArray("errors");
 
@@ -336,6 +410,10 @@ public final class TwitchApi {
             }
 
             return data;
+        } catch (HttpStatusException e) {
+            // Twitch says what is wrong with the request in the body: keep it so it can be read on screen
+            throw new IOException("Twitch refused the request (HTTP " + e.code + ")"
+                    + (e.body != null && !e.body.isEmpty() ? ": " + e.body : ""), e);
         } catch (JSONException e) {
             throw new IOException("Twitch: unreadable answer", e);
         }
@@ -402,6 +480,7 @@ public final class TwitchApi {
         String name = str(broadcaster, "displayName") != null ? str(broadcaster, "displayName") : login;
         JSONObject game = stream.optJSONObject("game");
         String gameName = game != null ? str(game, "displayName") : null;
+        rememberGame(game);
         long viewers = stream.optLong("viewersCount");
 
         ProviderMediaItem item = ProviderMediaItem.video(LIVE_PREFIX + login.toLowerCase(Locale.US));
@@ -422,6 +501,27 @@ public final class TwitchApi {
 
         item.secondTitle = second.toString();
         return item;
+    }
+
+    private static void rememberGame(JSONObject game) {
+        String name = game != null ? str(game, "name") : null;
+
+        if (name == null) {
+            return;
+        }
+
+        for (Game seen : sSeenGames) {
+            if (seen.name.equals(name)) {
+                return;
+            }
+        }
+
+        Game added = new Game();
+        added.name = name;
+        added.displayName = str(game, "displayName") != null ? str(game, "displayName") : name;
+        List<Game> copy = new ArrayList<>(sSeenGames);
+        copy.add(added);
+        sSeenGames = copy;
     }
 
     private static User parseUser(JSONObject json) {
