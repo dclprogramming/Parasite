@@ -33,8 +33,10 @@ public final class TwitchApi {
     private static final String TAG = TwitchApi.class.getSimpleName();
     private static final String GQL_URL = "https://gql.twitch.tv/gql";
     private static final String USHER_URL = "https://usher.ttvnw.net";
-    // The public client id of the twitch.tv web player
-    private static final String CLIENT_ID = "kimne78kd3ncwfgtpb7dj1w4tz46cn";
+    // The public client id of the twitch.tv web player. If Twitch ever rejects it, the current one is read from twitch.tv
+    private static final String DEFAULT_CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko";
+    private static volatile String sClientId = DEFAULT_CLIENT_ID;
+    private static volatile boolean sClientIdRefreshed;
     private static final String USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
     private static final Map<String, String> HEADERS = new HashMap<>();
@@ -44,7 +46,6 @@ public final class TwitchApi {
     public static final String VOD_PREFIX = "vod:";
 
     static {
-        HEADERS.put("Client-ID", CLIENT_ID);
         HEADERS.put("User-Agent", USER_AGENT);
         HEADERS.put("Accept", "*/*");
         HEADERS.put("Origin", "https://www.twitch.tv");
@@ -91,15 +92,44 @@ public final class TwitchApi {
     }
 
     private static Map<String, String> headers() {
+        Map<String, String> headers = new HashMap<>(HEADERS);
+        headers.put("Client-ID", sClientId);
         String token = sAuthToken;
 
-        if (token == null) {
-            return HEADERS;
+        if (token != null) {
+            headers.put("Authorization", "OAuth " + token);
         }
 
-        Map<String, String> headers = new HashMap<>(HEADERS);
-        headers.put("Authorization", "OAuth " + token);
         return headers;
+    }
+
+    /**
+     * Reads the client id the twitch.tv web page itself uses. Done once, only after Twitch said the id is invalid.
+     * @return true if a different id was found
+     */
+    private static boolean refreshClientId() {
+        if (sClientIdRefreshed) {
+            return false;
+        }
+
+        sClientIdRefreshed = true;
+
+        try {
+            Map<String, String> page = new HashMap<>();
+            page.put("User-Agent", USER_AGENT);
+            String html = ProviderHttp.get("https://www.twitch.tv", page);
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("\"Client-ID\":\"([A-Za-z0-9]{20,40})\"").matcher(html);
+
+            if (m.find() && !m.group(1).equals(sClientId)) {
+                Log.d(TAG, "Using the client id found on twitch.tv");
+                sClientId = m.group(1);
+                return true;
+            }
+        } catch (IOException | RuntimeException e) {
+            Log.e(TAG, "Could not read the client id from twitch.tv: " + e.getMessage());
+        }
+
+        return false;
     }
 
     // Models
@@ -332,7 +362,7 @@ public final class TwitchApi {
     /** HLS playlist of a live channel (all qualities). */
     public static String liveUrl(String login) throws IOException {
         String[] token = accessToken(true, login);
-        return USHER_URL + "/api/channel/hls/" + login.toLowerCase(Locale.US) + ".m3u8?" + usherParams(token);
+        return USHER_URL + "/api/v2/channel/hls/" + login.toLowerCase(Locale.US) + ".m3u8?" + usherParams(token);
     }
 
     /** HLS playlist of a past video (all qualities). */
@@ -343,7 +373,7 @@ public final class TwitchApi {
 
     private static String usherParams(String[] token) throws IOException {
         try {
-            return "allow_source=true&allow_audio_only=true&player=twitchweb&playlist_include_framerate=true"
+            return "allow_source=true&allow_audio_only=true&player_backend=mediaplayer&fast_bread=false&playlist_include_framerate=true"
                     + "&supported_codecs=avc1&p=" + (100000 + new Random().nextInt(9000000))
                     + "&sig=" + URLEncoder.encode(token[1], "UTF-8")
                     + "&token=" + URLEncoder.encode(token[0], "UTF-8");
@@ -434,6 +464,10 @@ public final class TwitchApi {
         try {
             return ProviderHttp.postJson(GQL_URL, body, headers());
         } catch (HttpStatusException e) {
+            if (e.code == 400 && e.body != null && e.body.contains("Client-ID") && refreshClientId()) {
+                return post(body); // same query with the client id found on twitch.tv
+            }
+
             if (e.code != 401 || sAuthToken == null) {
                 throw e;
             }
