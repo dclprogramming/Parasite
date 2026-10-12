@@ -13,6 +13,7 @@ import com.liskovsoft.smartyoutubetv2.tv.util.AnimatedGradientDrawable;
  */
 public class FocusGlowLinearLayout extends LinearLayout {
     private AnimatedGradientDrawable mGlow;
+    private int mGlowProvider = -1;
     private Drawable mRestBackground;
 
     public FocusGlowLinearLayout(Context context) {
@@ -50,8 +51,10 @@ public class FocusGlowLinearLayout extends LinearLayout {
             if (mRestBackground == null) {
                 mRestBackground = getBackground();
             }
-            if (mGlow == null) {
+            int provider = com.liskovsoft.smartyoutubetv2.common.prefs.ProviderData.getSelected();
+            if (mGlow == null || mGlowProvider != provider) { // colour follows the active provider
                 mGlow = AnimatedGradientDrawable.accent(getContext(), 12, 0, 0);
+                mGlowProvider = provider;
             }
             setBackground(mGlow);
             mGlow.start();

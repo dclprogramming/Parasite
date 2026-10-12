@@ -171,8 +171,47 @@ final class RumbleStreamPicker {
             result.note += " (left out " + stream.skippedPreviews + " preview file" + (stream.skippedPreviews > 1 ? "s" : "") + ")";
         }
 
+        // What Rumble offered, so a video that plays at one size can be explained from the details line
+        StringBuilder found = new StringBuilder();
+
+        for (RumbleParser.Candidate c : list) {
+            found.append(found.length() > 0 ? ", " : "").append(c.kind).append(c.height > 0 ? " " + c.height + "p" : "");
+        }
+
+        RumbleParser.Candidate hlsCandidate = firstHls(list);
+        result.note += " [found: " + found + (hlsCandidate != null ? "; HLS " + describeHls(hlsCandidate.url, net) : "")
+                + (liveHint ? "; live" : "") + "]";
+
         result.live = decideLive(stream, liveHint, result.chosen, net);
         return result;
+    }
+
+    /** One short phrase about an HLS playlist: how many sizes it lists, or what kind of playlist it is. */
+    static String describeHls(String url, Net net) {
+        String text = net.text(url);
+
+        if (text == null) {
+            return "playlist unreadable";
+        }
+
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("RESOLUTION=\\d+x(\\d+)").matcher(text);
+        StringBuilder heights = new StringBuilder();
+        int count = 0;
+
+        while (m.find()) {
+            heights.append(count > 0 ? "/" : "").append(m.group(1)).append('p');
+            count++;
+        }
+
+        if (count > 0) {
+            return count + " sizes " + heights;
+        }
+
+        if (text.contains("#EXT-X-STREAM-INF")) {
+            return "master without sizes";
+        }
+
+        return text.contains("#EXTINF") ? "single-size playlist" : "unknown playlist";
     }
 
     private static RumbleParser.Candidate firstHls(List<RumbleParser.Candidate> list) {

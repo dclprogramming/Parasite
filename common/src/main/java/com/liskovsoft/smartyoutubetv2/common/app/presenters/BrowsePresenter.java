@@ -210,6 +210,8 @@ public class BrowsePresenter extends BasePresenter<BrowseView> implements Sectio
 
         mSectionsMapping.put(BrowseSection.ID_PROVIDERS, new BrowseSection(BrowseSection.ID_PROVIDERS, getContext().getString(R.string.header_providers), BrowseSection.TYPE_PROVIDERS, R.drawable.icon_providers));
 
+        mSectionsMapping.put(BrowseSection.ID_CUSTOMIZE, new BrowseSection(BrowseSection.ID_CUSTOMIZE, getContext().getString(R.string.header_customize), BrowseSection.TYPE_SETTINGS_GRID, R.drawable.icon_settings));
+
         if (getSidebarService().isSettingsSectionEnabled()) {
             mSectionsMapping.put(MediaGroup.TYPE_SETTINGS, new BrowseSection(MediaGroup.TYPE_SETTINGS, getContext().getString(R.string.header_settings), BrowseSection.TYPE_SETTINGS_GRID, R.drawable.icon_settings));
         }
@@ -267,6 +269,7 @@ public class BrowsePresenter extends BasePresenter<BrowseView> implements Sectio
 
     private void initSettingsGridMapping() {
         mSettingsGridMapping.put(MediaGroup.TYPE_SETTINGS, () -> mDataSourcePresenter.getSettingItems(getContext()));
+        mSettingsGridMapping.put(BrowseSection.ID_CUSTOMIZE, () -> com.liskovsoft.smartyoutubetv2.common.providers.twitch.TwitchCustomize.items(getContext()));
     }
 
     private void initLocalGridMapping() {

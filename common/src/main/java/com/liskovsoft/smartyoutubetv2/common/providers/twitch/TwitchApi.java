@@ -41,9 +41,11 @@ public final class TwitchApi {
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
     private static final Map<String, String> HEADERS = new HashMap<>();
 
-    public static final int PAGE_SIZE = 30;
+    private static volatile int sPageSize = 30;
     public static final String LIVE_PREFIX = "live:";
     public static final String VOD_PREFIX = "vod:";
+    /** Channel id of a category card; the rest is the category name. */
+    public static final String GAME_PREFIX = "game:";
 
     static {
         HEADERS.put("User-Agent", USER_AGENT);
@@ -55,7 +57,7 @@ public final class TwitchApi {
     private static final String STREAM_FIELDS = "id title viewersCount createdAt "
             + "previewImageURL(width: 640, height: 360) "
             + "broadcaster { login displayName profileImageURL(width: 150) } "
-            + "game { name displayName }";
+            + "game { name displayName boxArtURL(width: 188, height: 250) }";
     private static final String USER_FIELDS = "login displayName description profileImageURL(width: 150) "
             + "stream { " + STREAM_FIELDS + " }";
     private static final String VIDEO_FIELDS = "id title lengthSeconds publishedAt viewCount "
@@ -73,6 +75,15 @@ public final class TwitchApi {
     private static volatile List<Game> sSeenGames = new ArrayList<>();
 
     private TwitchApi() {
+    }
+
+    /** How many items one list request asks for (the "streams per row" setting). */
+    public static void setPageSize(int size) {
+        sPageSize = Math.max(5, Math.min(size, 100));
+    }
+
+    public static int pageSize() {
+        return sPageSize;
     }
 
     private static volatile Runnable sAuthRejectedListener;
@@ -143,6 +154,16 @@ public final class TwitchApi {
     public static final class Game {
         public String name;
         public String displayName;
+        public String boxArtUrl;
+        public long viewers;
+        public long releaseMs;
+
+        /** A category card: opens that category's live streams. */
+        public ProviderMediaItem toCategoryItem() {
+            ProviderMediaItem item = ProviderMediaItem.channel(GAME_PREFIX + name, displayName, boxArtUrl);
+            item.secondTitle = viewers > 0 ? String.format(Locale.US, "%,d watching", viewers) : null;
+            return item;
+        }
     }
 
     public static final class User {
@@ -152,6 +173,8 @@ public final class TwitchApi {
         public String avatarUrl;
         /** The live stream card of the channel, null when the channel is offline. */
         public ProviderMediaItem live;
+        /** What the channel is streaming now, null when offline. */
+        public Game game;
 
         public ProviderMediaItem toChannelItem() {
             return ProviderMediaItem.channel(login, displayName != null ? displayName : login, avatarUrl);
@@ -174,7 +197,7 @@ public final class TwitchApi {
     // Lists
 
     public static Page topStreams(String after) throws IOException {
-        JSONObject data = query("query { streams(first: " + PAGE_SIZE + afterArg(after) + ") { edges { cursor node { " + STREAM_FIELDS + " } } } }");
+        JSONObject data = query("query { streams(first: " + sPageSize + afterArg(after) + ") { edges { cursor node { " + STREAM_FIELDS + " } } } }");
         return streamPage(data.optJSONObject("streams"));
     }
 
@@ -194,17 +217,16 @@ public final class TwitchApi {
     }
 
     private static List<Game> loadTopGames(int count) throws IOException {
-        JSONObject data = query("query { games(first: " + count + ") { edges { node { name displayName } } } }");
+        JSONObject data = query("query { games(first: " + count + ") { edges { node { name displayName "
+                + "boxArtURL(width: 188, height: 250) viewersCount } } } }");
         List<Game> games = new ArrayList<>();
         JSONArray edges = edgesOf(data.optJSONObject("games"));
 
         for (int i = 0; i < edges.length(); i++) {
-            JSONObject node = edges.optJSONObject(i) != null ? edges.optJSONObject(i).optJSONObject("node") : null;
+            JSONObject edge = edges.optJSONObject(i);
+            Game game = parseGame(edge != null ? edge.optJSONObject("node") : null);
 
-            if (node != null && str(node, "name") != null) {
-                Game game = new Game();
-                game.name = str(node, "name");
-                game.displayName = str(node, "displayName") != null ? str(node, "displayName") : game.name;
+            if (game != null) {
                 games.add(game);
             }
         }
@@ -212,8 +234,112 @@ public final class TwitchApi {
         return games;
     }
 
+    /**
+     * Categories released in the last {@code days} days, busiest first. Needs a field Twitch may not offer: an
+     * IOException means "can't tell", not "there are none".
+     */
+    public static List<Game> newGames(int days, int limit) throws IOException {
+        JSONObject data = query("query { games(first: 100) { edges { node { name displayName "
+                + "boxArtURL(width: 188, height: 250) viewersCount originalReleaseDate } } } }");
+        long oldest = System.currentTimeMillis() - days * 86_400_000L;
+        List<Game> fresh = new ArrayList<>();
+        JSONArray edges = edgesOf(data.optJSONObject("games"));
+
+        for (int i = 0; i < edges.length(); i++) {
+            JSONObject edge = edges.optJSONObject(i);
+            JSONObject node = edge != null ? edge.optJSONObject("node") : null;
+            Game game = parseGame(node);
+
+            if (game != null) {
+                game.releaseMs = parseDate(str(node, "originalReleaseDate"));
+
+                if (game.releaseMs >= oldest && game.releaseMs <= System.currentTimeMillis()) {
+                    fresh.add(game);
+                }
+            }
+        }
+
+        java.util.Collections.sort(fresh, new java.util.Comparator<Game>() {
+            @Override
+            public int compare(Game a, Game b) {
+                return Long.compare(b.viewers, a.viewers);
+            }
+        });
+
+        return fresh.subList(0, Math.min(limit, fresh.size()));
+    }
+
+    /**
+     * The busiest live streams across several categories, in one request. Unknown category names are skipped.
+     */
+    public static List<ProviderMediaItem> streamsOfGames(List<String> names, int perGame, int max) throws IOException {
+        if (names.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        StringBuilder body = new StringBuilder("query {");
+
+        for (int i = 0; i < names.size(); i++) {
+            body.append(" g").append(i).append(": game(name: ").append(q(names.get(i))).append(") { streams(first: ")
+                    .append(perGame).append(") { edges { node { ").append(STREAM_FIELDS).append(" } } } }");
+        }
+
+        JSONObject data = query(body.append(" }").toString());
+        List<long[]> order = new ArrayList<>(); // {viewers, index}
+        List<ProviderMediaItem> items = new ArrayList<>();
+        java.util.Set<String> seen = new java.util.HashSet<>();
+
+        for (int i = 0; i < names.size(); i++) {
+            JSONObject game = data.optJSONObject("g" + i);
+            JSONArray edges = edgesOf(game != null ? game.optJSONObject("streams") : null);
+
+            for (int k = 0; k < edges.length(); k++) {
+                JSONObject edge = edges.optJSONObject(k);
+                JSONObject node = edge != null ? edge.optJSONObject("node") : null;
+                ProviderMediaItem item = streamItem(node);
+
+                if (item != null && seen.add(item.videoId)) {
+                    order.add(new long[]{node.optLong("viewersCount"), items.size()});
+                    items.add(item);
+                }
+            }
+        }
+
+        java.util.Collections.sort(order, new java.util.Comparator<long[]>() {
+            @Override
+            public int compare(long[] a, long[] b) {
+                return Long.compare(b[0], a[0]);
+            }
+        });
+
+        List<ProviderMediaItem> sorted = new ArrayList<>();
+
+        for (long[] o : order) {
+            if (sorted.size() < max) {
+                sorted.add(items.get((int) o[1]));
+            }
+        }
+
+        return sorted;
+    }
+
+    private static Game parseGame(JSONObject json) {
+        String name = json != null ? str(json, "name") : null;
+
+        if (name == null) {
+            return null;
+        }
+
+        Game game = new Game();
+        game.name = name;
+        game.displayName = str(json, "displayName") != null ? str(json, "displayName") : name;
+        game.boxArtUrl = str(json, "boxArtURL");
+        game.viewers = json.optLong("viewersCount");
+        return game;
+    }
+
     public static Page gameStreams(String gameName, String after) throws IOException {
-        JSONObject data = query("query { game(name: " + q(gameName) + ") { streams(first: " + PAGE_SIZE
+        JSONObject data = query("query { game(name: " + q(gameName) + ") { streams(first: " + sPageSize
                 + afterArg(after) + ") { edges { cursor node { " + STREAM_FIELDS + " } } } } }");
         JSONObject game = data.optJSONObject("game");
         return streamPage(game != null ? game.optJSONObject("streams") : null);
@@ -224,7 +350,7 @@ public final class TwitchApi {
      * @param type ARCHIVE (past broadcasts), HIGHLIGHT or UPLOAD
      */
     public static Page videos(String login, String type, String after) throws IOException {
-        JSONObject data = query("query { user(login: " + q(login) + ") { videos(first: " + PAGE_SIZE + ", type: " + type
+        JSONObject data = query("query { user(login: " + q(login) + ") { videos(first: " + sPageSize + ", type: " + type
                 + afterArg(after) + ") { edges { cursor node { " + VIDEO_FIELDS + " } } } } }");
         JSONObject user = data.optJSONObject("user");
         JSONObject videos = user != null ? user.optJSONObject("videos") : null;
@@ -241,7 +367,7 @@ public final class TwitchApi {
             }
         }
 
-        if (page.items.size() < PAGE_SIZE) {
+        if (page.items.size() < sPageSize) {
             page.cursor = null; // short page = the last one
         }
 
@@ -526,7 +652,7 @@ public final class TwitchApi {
             }
         }
 
-        if (edges.length() < PAGE_SIZE) {
+        if (edges.length() < sPageSize) {
             page.cursor = null; // short page = the last one
         }
 
@@ -584,6 +710,7 @@ public final class TwitchApi {
         Game added = new Game();
         added.name = name;
         added.displayName = str(game, "displayName") != null ? str(game, "displayName") : name;
+        added.boxArtUrl = str(game, "boxArtURL");
         List<Game> copy = new ArrayList<>(sSeenGames);
         copy.add(added);
         sSeenGames = copy;
@@ -601,7 +728,9 @@ public final class TwitchApi {
         user.displayName = str(json, "displayName") != null ? str(json, "displayName") : login;
         user.description = str(json, "description");
         user.avatarUrl = str(json, "profileImageURL");
-        user.live = streamItem(json.optJSONObject("stream"));
+        JSONObject stream = json.optJSONObject("stream");
+        user.live = streamItem(stream);
+        user.game = stream != null ? parseGame(stream.optJSONObject("game")) : null;
         return user;
     }
 

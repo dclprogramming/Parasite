@@ -96,7 +96,7 @@ public class SidebarService implements ProfileChangeListener {
 
             int index = getDefaultSectionIndex(sectionId);
 
-            if (sectionId == BrowseSection.ID_PROVIDERS) { // keep Providers right above Settings
+            if (sectionId == BrowseSection.ID_PROVIDERS || sectionId == BrowseSection.ID_CUSTOMIZE) { // keep these right above Settings
                 int settingsIndex = Helpers.indexOfFirst(mPinnedItems,
                         obj -> obj != null && obj.sectionId == MediaGroup.TYPE_SETTINGS);
 
@@ -264,6 +264,7 @@ public class SidebarService implements ProfileChangeListener {
         mDefaultSections.put(R.string.header_playlists, MediaGroup.TYPE_USER_PLAYLISTS);
         mDefaultSections.put(R.string.my_videos, MediaGroup.TYPE_MY_VIDEOS);
         mDefaultSections.put(R.string.playback_queue_category_title, MediaGroup.TYPE_PLAYBACK_QUEUE);
+        mDefaultSections.put(R.string.header_customize, BrowseSection.ID_CUSTOMIZE); // Twitch only, right above Settings
         mDefaultSections.put(R.string.header_providers, BrowseSection.ID_PROVIDERS); // right above Settings
         mDefaultSections.put(R.string.header_settings, MediaGroup.TYPE_SETTINGS);
     }
@@ -321,6 +322,12 @@ public class SidebarService implements ProfileChangeListener {
         if (!ProviderData.isSidebarMigrated(mContext)) {
             ProviderData.setSidebarMigrated(mContext);
             enableSection(BrowseSection.ID_PROVIDERS, true);
+        }
+
+        // Same for the Customize button (only shown while Twitch is the active provider)
+        if (!ProviderData.isCustomizeMigrated(mContext)) {
+            ProviderData.setCustomizeMigrated(mContext);
+            enableSection(BrowseSection.ID_CUSTOMIZE, true);
         }
 
         cleanupPinnedItems();

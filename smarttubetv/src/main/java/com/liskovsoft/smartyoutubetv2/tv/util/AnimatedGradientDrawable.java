@@ -15,14 +15,21 @@ import android.graphics.drawable.Animatable;
 import android.graphics.drawable.Drawable;
 import android.view.animation.LinearInterpolator;
 
+import com.liskovsoft.smartyoutubetv2.common.prefs.ProviderData;
+
 /**
  * Rounded rectangle filled with a lavender gradient that slowly sweeps sideways.
  * Used as the background of the focused sidebar entry and the focused settings card.
  * The gradient starts and ends with the same colour, so the loop has no visible seam.
  */
 public class AnimatedGradientDrawable extends Drawable implements Animatable {
+    // YouTube: lavender. Rumble: green. Twitch: pink-purple like its logo.
     private static final int COLOR_DEEP = 0xFF5545D6;
     private static final int COLOR_LIGHT = 0xFF7A6CF2;
+    private static final int RUMBLE_DEEP = 0xFF2F7A1E;
+    private static final int RUMBLE_LIGHT = 0xFF58AA3B;
+    private static final int TWITCH_DEEP = 0xFF9138E8;
+    private static final int TWITCH_LIGHT = 0xFFC864F0;
     private static final long PERIOD_MS = 7000;
 
     private final Paint mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -52,7 +59,10 @@ public class AnimatedGradientDrawable extends Drawable implements Animatable {
     public static AnimatedGradientDrawable accent(Context context, float radiusDp, float insetHorizontalDp, float insetVerticalDp) {
         int ih = Math.round(UiStyle.dp(context, insetHorizontalDp));
         int iv = Math.round(UiStyle.dp(context, insetVerticalDp));
-        return new AnimatedGradientDrawable(new int[]{COLOR_DEEP, COLOR_LIGHT, COLOR_DEEP}, UiStyle.dp(context, radiusDp), ih, iv, ih, iv);
+        int provider = ProviderData.getSelected();
+        int deep = provider == ProviderData.RUMBLE ? RUMBLE_DEEP : provider == ProviderData.TWITCH ? TWITCH_DEEP : COLOR_DEEP;
+        int light = provider == ProviderData.RUMBLE ? RUMBLE_LIGHT : provider == ProviderData.TWITCH ? TWITCH_LIGHT : COLOR_LIGHT;
+        return new AnimatedGradientDrawable(new int[]{deep, light, deep}, UiStyle.dp(context, radiusDp), ih, iv, ih, iv);
     }
 
     @Override

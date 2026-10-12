@@ -14,6 +14,8 @@ public class BrowseSection {
     public static final int TYPE_PROVIDERS = 6;
     /** Sidebar section id of the Providers button (default sections use ids below 30). */
     public static final int ID_PROVIDERS = 23;
+    /** Sidebar section id of the Customize button (Twitch only). */
+    public static final int ID_CUSTOMIZE = 24;
     private static final int MAX_TITLE_LENGTH_CHARS = 30;
     private final int mId;
     private String mTitle;

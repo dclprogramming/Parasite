@@ -150,7 +150,7 @@ public class SectionMenuPresenter extends BaseMenuPresenter {
             return;
         }
 
-        if (mSection == null || mSection.getId() == MediaGroup.TYPE_SETTINGS || mSection.getId() == BrowseSection.ID_PROVIDERS) {
+        if (mSection == null || mSection.getId() == MediaGroup.TYPE_SETTINGS || mSection.getId() == BrowseSection.ID_PROVIDERS || mSection.getId() == BrowseSection.ID_CUSTOMIZE) {
             return;
         }
 

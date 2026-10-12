@@ -284,7 +284,7 @@ public class TwitchMediaItemService extends StubMediaItemService {
     }
 
     private void follow(String channelId, MediaItem hint) {
-        if (channelId == null) {
+        if (channelId == null || channelId.startsWith(TwitchApi.GAME_PREFIX)) { // categories can't be followed
             return;
         }
 

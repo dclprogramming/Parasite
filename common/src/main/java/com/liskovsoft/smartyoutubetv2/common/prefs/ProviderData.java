@@ -18,6 +18,7 @@ public final class ProviderData {
     private static final String PREFS = "parasite_providers";
     private static final String KEY_SELECTED = "selected";
     private static final String KEY_SIDEBAR_MIGRATED = "sidebar_migrated";
+    private static final String KEY_CUSTOMIZE_MIGRATED = "customize_migrated";
 
     private static Context sAppContext;
 
@@ -64,6 +65,10 @@ public final class ProviderData {
      * sections (my videos, playlists, notifications, shorts...) are hidden.
      */
     public static boolean supportsSection(int sectionId) {
+        if (sectionId == BrowseSection.ID_CUSTOMIZE) { // only Twitch has anything to customize
+            return getSelected() == TWITCH;
+        }
+
         if (getSelected() == YOUTUBE) {
             return true;
         }
@@ -96,6 +101,15 @@ public final class ProviderData {
             default:
                 return false;
         }
+    }
+
+    /** One-time flag: the Customize button has been added to an existing sidebar. */
+    public static boolean isCustomizeMigrated(Context context) {
+        return prefs(context).getBoolean(KEY_CUSTOMIZE_MIGRATED, false);
+    }
+
+    public static void setCustomizeMigrated(Context context) {
+        prefs(context).edit().putBoolean(KEY_CUSTOMIZE_MIGRATED, true).apply();
     }
 
     /** One-time flag: the Providers button has been added to an existing sidebar. */

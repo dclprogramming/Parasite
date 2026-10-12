@@ -13,6 +13,7 @@
     <string name="provider_youtube">YouTube</string>
     <string name="provider_rumble">Rumble</string>
     <string name="provider_twitch">Twitch</string>
+    <string name="header_customize">Customize</string>
     <string name="provider_status_active">Active</string>
     <string name="provider_status_select">Select</string>
     <string name="provider_status_soon">Coming soon</string>

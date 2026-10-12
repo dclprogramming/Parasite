@@ -313,16 +313,10 @@ public class NavigateTitleView extends TitleView implements OnDataChange, Accoun
         }
 
         if (ProviderData.getSelected() != ProviderData.YOUTUBE) {
+            int provider = ProviderData.getSelected();
             boolean signedIn = ProviderLogin.isSignedIn(getContext());
-            String name = ProviderLogin.nameOf(ProviderData.getSelected());
-            if (mNormalOrbColors == null) {
-                mNormalOrbColors = mAccountView.getOrbColors();
-            }
-
-            Colors orbColors = mNormalOrbColors;
-            int base = signedIn ? 0xFF2E7D32 : orbColors.color; // green while signed in
-            mAccountView.setOrbColors(new Colors(base, signedIn ? 0xFF43A047 : orbColors.brightColor, ContextCompat.getColor(getContext(), R.color.orb_icon_color)));
-            mAccountView.setOrbIcon(ContextCompat.getDrawable(getContext(), R.drawable.browse_title_account));
+            String name = ProviderLogin.nameOf(provider);
+            showProviderIcon(provider, signedIn);
             TooltipCompatHandler.setTooltipText(mAccountView, signedIn ? "Signed in to " + name + " (select to sign out)" : "Sign in to " + name);
             return;
         }
@@ -335,11 +329,32 @@ public class NavigateTitleView extends TitleView implements OnDataChange, Accoun
             //TooltipCompatHandler.setTooltipText(mAccountView, Utils.updateTooltip(getContext(), accountName));
             TooltipCompatHandler.setTooltipText(mAccountView, accountName);
         } else {
-            Colors orbColors = mAccountView.getOrbColors();
-            mAccountView.setOrbColors(new Colors(orbColors.color, orbColors.brightColor, ContextCompat.getColor(getContext(), R.color.orb_icon_color)));
-            mAccountView.setOrbIcon(ContextCompat.getDrawable(getContext(), R.drawable.browse_title_account));
+            showProviderIcon(ProviderData.YOUTUBE, false); // grayed out YouTube logo while no account is selected
             TooltipCompatHandler.setTooltipText(mAccountView, getContext().getString(R.string.dialog_account_none));
         }
+    }
+
+    /**
+     * The logo of the provider in use: in colour while signed in, grayed out otherwise.
+     */
+    private void showProviderIcon(int provider, boolean signedIn) {
+        if (mNormalOrbColors == null) {
+            mNormalOrbColors = mAccountView.getOrbColors();
+        }
+
+        int icon;
+
+        if (provider == ProviderData.RUMBLE) {
+            icon = signedIn ? R.drawable.ic_provider_rumble : R.drawable.ic_provider_rumble_gray;
+        } else if (provider == ProviderData.TWITCH) {
+            icon = signedIn ? R.drawable.ic_provider_twitch : R.drawable.ic_provider_twitch_gray;
+        } else {
+            icon = signedIn ? R.drawable.ic_provider_youtube : R.drawable.ic_provider_youtube_gray;
+        }
+
+        // TRANSPARENT icon color = draw the logo as it is (no white tint)
+        mAccountView.setOrbColors(new Colors(mNormalOrbColors.color, mNormalOrbColors.brightColor, Color.TRANSPARENT));
+        mAccountView.setOrbIcon(ContextCompat.getDrawable(getContext(), icon));
     }
 
     private void updateLanguageIcon() {

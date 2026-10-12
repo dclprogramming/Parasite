@@ -49,7 +49,7 @@ public final class ProviderServices {
                             "Twitch no longer accepts your sign-in, so you were signed out. Sign in again from the account button.");
                 });
             });
-            return new ProviderServiceManager(new TwitchContentService(store), new TwitchMediaItemService(store));
+            return new ProviderServiceManager(new TwitchContentService(store, context), new TwitchMediaItemService(store));
         }
 
         if (provider == ProviderData.RUMBLE && context != null) {
