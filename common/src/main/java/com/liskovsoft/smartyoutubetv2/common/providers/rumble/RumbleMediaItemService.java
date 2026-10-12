@@ -145,7 +145,11 @@ public class RumbleMediaItemService extends StubMediaItemService {
         @Override
         public String text(String url) {
             try {
-                return ProviderHttp.get(url);
+                java.util.Map<String, String> headers = new java.util.HashMap<>();
+                headers.put("Referer", "https://rumble.com/");
+                headers.put("Origin", "https://rumble.com");
+                headers.put("Accept", "*/*");
+                return ProviderHttp.get(url, headers);
             } catch (Exception e) {
                 return null;
             }

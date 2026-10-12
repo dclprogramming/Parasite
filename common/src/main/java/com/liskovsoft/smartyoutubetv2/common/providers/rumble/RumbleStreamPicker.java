@@ -36,6 +36,7 @@ final class RumbleStreamPicker {
     /** About 120 kbit/s: a real video file is never lighter than this per second of its length. */
     private static final long MIN_BYTES_PER_SECOND = 15_000;
     private static final int MAX_PROBES = 5;
+    private static final int MAX_HEIGHT_FOR_FILE = 1080; // a file this tall is already the best size
 
     private RumbleStreamPicker() {
     }
@@ -81,7 +82,9 @@ final class RumbleStreamPicker {
             if (liveHint || (topFile != null && topFile.height > 0 && topFile.height < 360)
                     || (sizes[0] >= 2 && (topFile == null || hlsMax == 0 || hlsMax >= topFile.height))
                     // HLS lists every size (up to 2160p) in the player's quality menu; a lone file is stuck at one size
-                    || (sizes[0] >= 2 && topFile.height <= 720)) {
+                    || (sizes[0] >= 2 && topFile.height <= 720)
+                    // playlist could not be read here (Rumble may want its own referer): still better than one lone file
+                    || (sizes[0] < 0 && topFile != null && topFile.height < MAX_HEIGHT_FOR_FILE)) {
                 moveHlsFirst(list);
             }
         }
@@ -233,6 +236,10 @@ final class RumbleStreamPicker {
 
         try {
             String text = net.text(url);
+
+            if (text == null) {
+                return new int[]{-1, 0}; // unreadable from here: the player may still read it
+            }
 
             if (text != null) {
                 java.util.regex.Matcher m = java.util.regex.Pattern.compile("RESOLUTION=(\\d+)x(\\d+)").matcher(text);
