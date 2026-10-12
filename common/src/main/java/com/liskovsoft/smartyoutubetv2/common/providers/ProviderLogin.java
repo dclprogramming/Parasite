@@ -12,7 +12,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 import com.liskovsoft.sharedutils.helpers.MessageHelpers;
 import com.liskovsoft.smartyoutubetv2.common.prefs.ProviderData;
-import com.liskovsoft.smartyoutubetv2.common.providers.odysee.OdyseeAccount;
 import com.liskovsoft.smartyoutubetv2.common.providers.rumble.RumbleApi;
 
 /**
@@ -46,13 +45,18 @@ public final class ProviderLogin {
     }
 
     /**
-     * The sign-in icon at the top of the app, for Rumble / Odysee: opens their sign-in page, or (when already signed
-     * in) offers to sign out.
+     * The sign-in icon at the top of the app, for Rumble: opens its sign-in page, or (when already signed
+     * in) offers to sign out. Twitch has no sign-in here.
      */
     public static void onTopIconClicked(Context context) {
         int provider = ProviderData.getSelected();
 
         if (provider == ProviderData.YOUTUBE) {
+            return;
+        }
+
+        if (provider == ProviderData.TWITCH) {
+            MessageHelpers.showMessage(context, "Twitch needs no sign-in here. Channels you follow are saved on this device.");
             return;
         }
 
@@ -71,7 +75,7 @@ public final class ProviderLogin {
     }
 
     public static String nameOf(int provider) {
-        return provider == ProviderData.RUMBLE ? "Rumble" : "Odysee";
+        return provider == ProviderData.RUMBLE ? "Rumble" : "Twitch";
     }
 
     public static boolean isSignedIn(Context context) {
@@ -84,7 +88,7 @@ public final class ProviderLogin {
     public static void start(Context context, Runnable onChanged) {
         int provider = ProviderData.getSelected();
 
-        if (provider == ProviderData.YOUTUBE) {
+        if (provider == ProviderData.YOUTUBE || provider == ProviderData.TWITCH) {
             return;
         }
 
@@ -109,7 +113,7 @@ public final class ProviderLogin {
             String message;
 
             try {
-                message = provider == ProviderData.ODYSEE ? finishOdysee(context) : finishRumble(context, finalUrl);
+                message = finishRumble(context, finalUrl);
             } catch (Exception e) {
                 message = nameOf(provider) + ": could not check the sign-in (" + e.getMessage() + ")";
             }
@@ -124,25 +128,6 @@ public final class ProviderLogin {
                 }
             });
         }).start();
-    }
-
-    private static String finishOdysee(Context context) throws Exception {
-        String token = ProviderAuth.cookie(ProviderAuth.ODYSEE_SITE, "auth_token");
-
-        if (token == null) {
-            ProviderAuth.setSignedIn(context, ProviderData.ODYSEE, false);
-            return "Odysee sign-in not detected. Sign in on the page, then press Back.";
-        }
-
-        ProviderAuth.setOdyseeToken(context, token);
-        ProviderAuth.setSignedIn(context, ProviderData.ODYSEE, true);
-
-        try {
-            int count = OdyseeAccount.importFollows(new ProviderStore(context, "odysee"), token);
-            return "Signed in to Odysee. Imported " + count + " followed channels.";
-        } catch (Exception e) {
-            return "Signed in to Odysee, but your followed channels could not be loaded (" + e.getMessage() + ")";
-        }
     }
 
     private static String finishRumble(Context context, String finalUrl) throws Exception {

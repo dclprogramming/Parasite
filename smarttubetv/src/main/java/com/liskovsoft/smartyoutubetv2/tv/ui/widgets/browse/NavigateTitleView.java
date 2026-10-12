@@ -199,7 +199,7 @@ public class NavigateTitleView extends TitleView implements OnDataChange, Accoun
         mAccountView = findViewById(R.id.account_orb);
         mAccountView.setOnOrbClickedListener(v -> {
             if (ProviderData.getSelected() != ProviderData.YOUTUBE) {
-                ProviderLogin.onTopIconClicked(getContext()); // Rumble / Odysee sign in or out
+                ProviderLogin.onTopIconClicked(getContext()); // Rumble sign in or out
             } else {
                 AccountSelectionPresenter.instance(getContext()).nextAccountOrDialog();
             }

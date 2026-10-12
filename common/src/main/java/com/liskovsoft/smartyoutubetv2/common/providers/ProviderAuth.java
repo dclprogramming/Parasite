@@ -11,7 +11,7 @@ import com.liskovsoft.smartyoutubetv2.common.prefs.ProviderData;
  * (see {@link ProviderLoginDialog}); the session lives in the WebView cookies.
  */
 public final class ProviderAuth {
-    public static final String ODYSEE_SITE = "https://odysee.com";
+    public static final String TWITCH_SITE = "https://www.twitch.tv";
     public static final String RUMBLE_SITE = "https://rumble.com";
 
     private ProviderAuth() {
@@ -29,16 +29,8 @@ public final class ProviderAuth {
         prefs(context).edit().putBoolean("signed_" + provider, signedIn).commit();
     }
 
-    public static String getOdyseeToken(Context context) {
-        return context != null ? prefs(context).getString("odysee_token", null) : null;
-    }
-
-    public static void setOdyseeToken(Context context, String token) {
-        prefs(context).edit().putString("odysee_token", token).commit();
-    }
-
     public static String siteOf(int provider) {
-        return provider == ProviderData.RUMBLE ? RUMBLE_SITE : ODYSEE_SITE;
+        return provider == ProviderData.RUMBLE ? RUMBLE_SITE : TWITCH_SITE;
     }
 
     /**
@@ -67,10 +59,6 @@ public final class ProviderAuth {
      */
     public static void signOut(Context context, int provider) {
         setSignedIn(context, provider, false);
-
-        if (provider == ProviderData.ODYSEE) {
-            setOdyseeToken(context, null);
-        }
 
         String site = siteOf(provider);
         CookieManager cookies = CookieManager.getInstance();

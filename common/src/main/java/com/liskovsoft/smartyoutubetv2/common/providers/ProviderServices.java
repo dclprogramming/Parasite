@@ -4,10 +4,10 @@ import android.content.Context;
 
 import com.liskovsoft.mediaserviceinterfaces.ServiceManager;
 import com.liskovsoft.smartyoutubetv2.common.prefs.ProviderData;
-import com.liskovsoft.smartyoutubetv2.common.providers.odysee.OdyseeContentService;
-import com.liskovsoft.smartyoutubetv2.common.providers.odysee.OdyseeMediaItemService;
 import com.liskovsoft.smartyoutubetv2.common.providers.rumble.RumbleContentService;
 import com.liskovsoft.smartyoutubetv2.common.providers.rumble.RumbleMediaItemService;
+import com.liskovsoft.smartyoutubetv2.common.providers.twitch.TwitchContentService;
+import com.liskovsoft.smartyoutubetv2.common.providers.twitch.TwitchMediaItemService;
 import com.liskovsoft.youtubeapi.service.YouTubeServiceManager;
 
 /**
@@ -35,9 +35,9 @@ public final class ProviderServices {
     private static ServiceManager create(int provider) {
         Context context = ProviderData.getAppContext();
 
-        if (provider == ProviderData.ODYSEE && context != null) {
-            ProviderStore store = new ProviderStore(context, "odysee");
-            return new ProviderServiceManager(new OdyseeContentService(store), new OdyseeMediaItemService(store));
+        if (provider == ProviderData.TWITCH && context != null) {
+            ProviderStore store = new ProviderStore(context, "twitch");
+            return new ProviderServiceManager(new TwitchContentService(store), new TwitchMediaItemService(store));
         }
 
         if (provider == ProviderData.RUMBLE && context != null) {

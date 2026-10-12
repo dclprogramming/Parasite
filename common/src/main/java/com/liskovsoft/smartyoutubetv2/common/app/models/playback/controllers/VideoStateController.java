@@ -455,7 +455,7 @@ public class VideoStateController extends BasePlayerController {
         if (getPlayerData().getTempVideoFormat() != null) {
             getPlayer().setFormat(getPlayerData().getTempVideoFormat());
         } else if (ProviderData.getSelected() != ProviderData.YOUTUBE) {
-            // Rumble / Odysee: start at the best size the video has (the quality menu can still lower it)
+            // Rumble / Twitch: start at the best size the video has (the quality menu can still lower it)
             getPlayer().setFormat(ExoFormatItem.fromVideoSpec("3840,2160,60,avc", true));
         } else {
             getPlayer().setFormat(getPlayerData().getFormat(FormatItem.TYPE_VIDEO));
@@ -571,7 +571,7 @@ public class VideoStateController extends BasePlayerController {
         }
 
         // Set actual position for live videos with uncommon length
-        // Rumble/Odysee live streams always start at the live edge (they have no useful saved position)
+        // Rumble/Twitch live streams always start at the live edge (they have no useful saved position)
         boolean otherProviderLive = item.isLive && ProviderData.getSelected() != ProviderData.YOUTUBE;
         if (item.isLive && (otherProviderLive || state == null || state.durationMs - state.positionMs < Math.max(RESTORE_LIVE_BUFFER_MS, getLiveThreshold()))) {
             // Add buffer. Should I take into account segment offset???

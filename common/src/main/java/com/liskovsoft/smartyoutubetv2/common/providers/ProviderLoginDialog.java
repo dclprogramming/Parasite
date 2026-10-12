@@ -27,7 +27,7 @@ public final class ProviderLoginDialog {
     }
 
     public static void show(Context context, int provider, String hint, OnClosed onClosed) {
-        String loginUrl = provider == ProviderData.RUMBLE ? "https://rumble.com/login.php" : "https://odysee.com/$/signin";
+        String loginUrl = provider == ProviderData.RUMBLE ? "https://rumble.com/login.php" : "https://www.twitch.tv/login";
         Dialog dialog = new Dialog(context, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
         FrameLayout root = new FrameLayout(context);
         WebView web = new WebView(context);

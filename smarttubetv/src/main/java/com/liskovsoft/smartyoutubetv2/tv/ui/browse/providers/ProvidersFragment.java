@@ -23,13 +23,13 @@ import com.liskovsoft.smartyoutubetv2.tv.ui.browse.interfaces.Section;
 import com.liskovsoft.smartyoutubetv2.tv.util.UiStyle;
 
 /**
- * Sidebar "Providers" page: three big cards (YouTube, Rumble, Odysee) side by side.
+ * Sidebar "Providers" page: three big cards (YouTube, Rumble, Twitch) side by side.
  */
 public class ProvidersFragment extends Fragment implements BrowseSupportFragment.MainFragmentAdapterProvider, Section {
     private static final int BASE_COLOR = 0xFF17142E;
-    private static final int[] BRAND_COLORS = {0xFFFF0033, 0xFF85C742, 0xFFEF1970};
-    private static final int[] NAMES = {R.string.provider_youtube, R.string.provider_rumble, R.string.provider_odysee};
-    private static final String[] LETTERS = {"Y", "R", "O"};
+    private static final int[] BRAND_COLORS = {0xFFFF0033, 0xFF85C742, 0xFF9146FF};
+    private static final int[] NAMES = {R.string.provider_youtube, R.string.provider_rumble, R.string.provider_twitch};
+    private static final String[] LETTERS = {"Y", "R", "T"};
 
     private final BrowseSupportFragment.MainFragmentAdapter<Fragment> mMainFragmentAdapter =
             new BrowseSupportFragment.MainFragmentAdapter<Fragment>(this);
@@ -174,7 +174,7 @@ public class ProvidersFragment extends Fragment implements BrowseSupportFragment
 
         int provider = ProviderData.getSelected(getContext());
 
-        if (provider == ProviderData.YOUTUBE) {
+        if (provider == ProviderData.YOUTUBE || provider == ProviderData.TWITCH) { // Twitch needs no sign-in here
             mAccountButton.setVisibility(View.GONE);
             return;
         }

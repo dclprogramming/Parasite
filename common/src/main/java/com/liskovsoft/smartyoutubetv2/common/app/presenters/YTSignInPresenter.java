@@ -92,7 +92,7 @@ public class YTSignInPresenter extends SignInPresenter {
 
     public void start() {
         if (ProviderData.getSelected() != ProviderData.YOUTUBE) {
-            ProviderLogin.start(getContext(), null); // Rumble / Odysee: their own sign-in page
+            ProviderLogin.start(getContext(), null); // Rumble: its own sign-in page
             return;
         }
 

@@ -7,13 +7,12 @@ import com.liskovsoft.mediaserviceinterfaces.data.MediaGroup;
 import com.liskovsoft.smartyoutubetv2.common.app.models.data.BrowseSection;
 
 /**
- * Which video provider the app is set to use. Only YouTube is wired up so far; Rumble and Odysee
- * can be selected in the UI once {@link #isAvailable(int)} returns true for them.
+ * Which video provider the app is set to use: YouTube, Rumble or Twitch.
  */
 public final class ProviderData {
     public static final int YOUTUBE = 0;
     public static final int RUMBLE = 1;
-    public static final int ODYSEE = 2;
+    public static final int TWITCH = 2;
     public static final int COUNT = 3;
 
     private static final String PREFS = "parasite_providers";
@@ -56,7 +55,7 @@ public final class ProviderData {
 
     /** Providers that have a working service layer. */
     public static boolean isAvailable(int provider) {
-        return provider == YOUTUBE || provider == ODYSEE || provider == RUMBLE;
+        return provider == YOUTUBE || provider == TWITCH || provider == RUMBLE;
     }
 
     /**
@@ -67,6 +66,17 @@ public final class ProviderData {
     public static boolean supportsSection(int sectionId) {
         if (getSelected() == YOUTUBE) {
             return true;
+        }
+
+        if (getSelected() == TWITCH) {
+            switch (sectionId) { // Twitch has no sports / news / music categories
+                case MediaGroup.TYPE_SPORTS:
+                case MediaGroup.TYPE_NEWS:
+                case MediaGroup.TYPE_MUSIC:
+                    return false;
+                default:
+                    break;
+            }
         }
 
         switch (sectionId) {
