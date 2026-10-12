@@ -38,6 +38,17 @@ public final class ProviderServices {
         if (provider == ProviderData.TWITCH && context != null) {
             ProviderStore store = new ProviderStore(context, "twitch");
             com.liskovsoft.smartyoutubetv2.common.providers.twitch.TwitchApi.setAuthToken(ProviderAuth.getTwitchToken(context));
+            com.liskovsoft.smartyoutubetv2.common.providers.twitch.TwitchApi.setAuthRejectedListener(() -> {
+                if (!ProviderAuth.isSignedIn(context, ProviderData.TWITCH)) {
+                    return; // still signing in: the sign-in screen reports it
+                }
+
+                new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                    ProviderAuth.signOut(context, ProviderData.TWITCH);
+                    com.liskovsoft.sharedutils.helpers.MessageHelpers.showLongMessage(context,
+                            "Twitch no longer accepts your sign-in, so you were signed out. Sign in again from the account button.");
+                });
+            });
             return new ProviderServiceManager(new TwitchContentService(store), new TwitchMediaItemService(store));
         }
 

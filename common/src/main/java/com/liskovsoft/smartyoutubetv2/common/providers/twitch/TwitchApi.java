@@ -74,6 +74,13 @@ public final class TwitchApi {
     private TwitchApi() {
     }
 
+    private static volatile Runnable sAuthRejectedListener;
+
+    /** Called (on any thread) when Twitch refuses the stored login token; the token is dropped before it runs. */
+    public static void setAuthRejectedListener(Runnable listener) {
+        sAuthRejectedListener = listener;
+    }
+
     /** The signed-in account's OAuth token, or null when signed out. */
     public static void setAuthToken(String token) {
         sAuthToken = token != null && !token.isEmpty() ? token : null;
@@ -396,7 +403,7 @@ public final class TwitchApi {
                 body.put("variables", variables);
             }
 
-            JSONObject root = new JSONObject(ProviderHttp.postJson(GQL_URL, body.toString(), headers()));
+            JSONObject root = new JSONObject(post(body.toString()));
             JSONObject data = root.optJSONObject("data");
             JSONArray errors = root.optJSONArray("errors");
 
@@ -416,6 +423,30 @@ public final class TwitchApi {
                     + (e.body != null && !e.body.isEmpty() ? ": " + e.body : ""), e);
         } catch (JSONException e) {
             throw new IOException("Twitch: unreadable answer", e);
+        }
+    }
+
+    /**
+     * Sends the query. If Twitch refuses the login token, the token is dropped and the query is repeated as a
+     * guest, so browsing keeps working with a bad or expired sign-in.
+     */
+    private static String post(String body) throws IOException {
+        try {
+            return ProviderHttp.postJson(GQL_URL, body, headers());
+        } catch (HttpStatusException e) {
+            if (e.code != 401 || sAuthToken == null) {
+                throw e;
+            }
+
+            Log.e(TAG, "Twitch refused the login token, continuing as a guest: " + e.getMessage());
+            sAuthToken = null;
+            Runnable listener = sAuthRejectedListener;
+
+            if (listener != null) {
+                listener.run();
+            }
+
+            return ProviderHttp.postJson(GQL_URL, body, headers());
         }
     }
 

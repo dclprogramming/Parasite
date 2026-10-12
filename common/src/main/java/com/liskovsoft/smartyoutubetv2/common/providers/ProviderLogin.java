@@ -140,24 +140,39 @@ public final class ProviderLogin {
             return "Twitch sign-in not detected. Sign in on the page, then press Back.";
         }
 
-        ProviderAuth.setTwitchToken(context, token);
-        ProviderAuth.setSignedIn(context, ProviderData.TWITCH, true);
+        // Check the token right away: a rejected one is dropped by the API layer, and must not count as signed in
         TwitchApi.setAuthToken(token);
+        int count;
 
         try {
-            int count = TwitchAccount.importFollows(new ProviderStore(context, "twitch"));
-            return "Signed in to Twitch. Imported " + count + " followed channels.";
+            count = TwitchAccount.importFollows(new ProviderStore(context, "twitch"));
         } catch (Exception e) {
+            if (!TwitchApi.isSignedIn()) {
+                ProviderAuth.setSignedIn(context, ProviderData.TWITCH, false);
+                ProviderAuth.setTwitchToken(context, null);
+                return "Twitch did not accept the login (token from cookie '" + sTwitchTokenSource + "', "
+                        + token.length() + " characters). Browsing still works as a guest.";
+            }
+
+            ProviderAuth.setTwitchToken(context, token);
+            ProviderAuth.setSignedIn(context, ProviderData.TWITCH, true);
             return "Signed in to Twitch, but your followed channels could not be loaded (" + e.getMessage() + ")";
         }
+
+        ProviderAuth.setTwitchToken(context, token);
+        ProviderAuth.setSignedIn(context, ProviderData.TWITCH, true);
+        return "Signed in to Twitch. Imported " + count + " followed channels.";
     }
 
     /** The login token of twitch.tv from the browser cookies: its own cookie, or the one inside the "twilight-user" cookie. */
+    private static String sTwitchTokenSource = "?";
+
     private static String twitchToken() {
         String token = ProviderAuth.cookie(ProviderAuth.TWITCH_SITE, "auth-token");
 
         if (token != null) {
-            return token;
+            sTwitchTokenSource = "auth-token";
+            return cleanToken(token);
         }
 
         try {
@@ -166,13 +181,31 @@ public final class ProviderLogin {
             if (user != null) {
                 String json = java.net.URLDecoder.decode(user, "UTF-8");
                 String value = new org.json.JSONObject(json).optString("authToken", null);
-                return value != null && !value.isEmpty() ? value : null;
+                sTwitchTokenSource = "twilight-user";
+                return value != null && !value.isEmpty() ? cleanToken(value) : null;
             }
         } catch (Exception e) {
             // NOP
         }
 
         return null;
+    }
+
+    /** Cookie values can arrive quoted or percent-encoded; the token itself is plain letters and digits. */
+    private static String cleanToken(String raw) {
+        String token = raw.trim();
+
+        try {
+            token = java.net.URLDecoder.decode(token, "UTF-8");
+        } catch (Exception e) {
+            // keep as is
+        }
+
+        if (token.length() > 1 && token.startsWith("\"") && token.endsWith("\"")) {
+            token = token.substring(1, token.length() - 1);
+        }
+
+        return token.trim();
     }
 
     private static String finishRumble(Context context, String finalUrl) throws Exception {
