@@ -75,8 +75,25 @@ final class RumbleStreamPicker {
         int hlsMax = 0;
 
         if (hasHls) {
+            // Several playlists may be known (the embed data's, and the ones the page's own player loaded):
+            // the one listing the most sizes goes first
             RumbleParser.Candidate hls = firstHls(list);
+            final int hlsSlot = list.indexOf(hls);
             int[] sizes = hlsSizes(hls.url, net); // {renditions, tallest}
+
+            for (RumbleParser.Candidate c : list) {
+                if (c.kind.equals("HLS") && c != hls) {
+                    int[] other = hlsSizes(c.url, net);
+
+                    if (other[0] > sizes[0] || (other[0] == sizes[0] && other[1] > sizes[1])) {
+                        hls = c;
+                        sizes = other;
+                    }
+                }
+            }
+
+            list.remove(hls);
+            list.add(hlsSlot, hls); // the best playlist takes the place of the first one
             hlsMax = sizes[1];
 
             if (liveHint || (topFile != null && topFile.height > 0 && topFile.height < 360)

@@ -129,6 +129,7 @@ public final class RumbleParser {
         public String webmUrl; // last resort
         public int webmHeight;
         public String stability; // extra note for the details line (e.g. which server)
+        public String uaInfo; // what the embed data lists (keys and sizes), for the details line
         public int skippedPreviews; // preview/thumbnail/timeline files that were left out
 
         /** Which stream the app plays, in words. Shown in the video description to help diagnose playback problems. */
@@ -419,7 +420,8 @@ public final class RumbleParser {
             }
 
             int[] skipped = new int[1];
-            JSONObject ua = root.optJSONObject("ua"); // is an empty array when nothing can be played
+            JSONObject ua = root.optJSONObject("ua");
+            stream.uaInfo = describeUa(ua); // is an empty array when nothing can be played
             if (ua != null) {
                 for (Object[] v : sortedVariants(ua.optJSONObject("mp4"), skipped)) {
                     stream.candidates.add(new Candidate((String) v[1], "MP4", (Integer) v[0]));
@@ -486,6 +488,47 @@ public final class RumbleParser {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    /** Keys and picture heights of each kind of file in the embed data, e.g. "mp4[480:h480] hls[auto]". */
+    private static String describeUa(JSONObject ua) {
+        if (ua == null) {
+            return "no ua";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        Iterator<String> kinds = ua.keys();
+
+        while (kinds.hasNext()) {
+            String kind = kinds.next();
+            JSONObject variants = ua.optJSONObject(kind);
+
+            if (variants == null) {
+                continue;
+            }
+
+            sb.append(sb.length() > 0 ? " " : "").append(kind).append('[');
+            Iterator<String> keys = variants.keys();
+            boolean first = true;
+
+            while (keys.hasNext()) {
+                String key = keys.next();
+                JSONObject variant = variants.optJSONObject(key);
+                JSONObject meta = variant != null ? variant.optJSONObject("meta") : null;
+
+                sb.append(first ? "" : ",").append(key);
+
+                if (meta != null && meta.optInt("h", 0) > 0) {
+                    sb.append(":h").append(meta.optInt("h"));
+                }
+
+                first = false;
+            }
+
+            sb.append(']');
+        }
+
+        return sb.length() > 0 ? sb.toString() : "empty ua";
     }
 
     public static Stream parseScrape(String json) {

@@ -124,7 +124,8 @@ public class RumbleMediaItemService extends StubMediaItemService {
         if (result.chosen != null) {
             stream.chosen = result.chosen;
             stream.stability = "via " + HostCheck.hostOf(result.chosen.url)
-                    + (result.unreachable.isEmpty() ? "" : " (skipped unreachable: " + result.unreachable + ")") + result.note;
+                    + (result.unreachable.isEmpty() ? "" : " (skipped unreachable: " + result.unreachable + ")") + result.note
+                    + (stream.uaInfo != null ? " {data: " + stream.uaInfo + "}" : "");
             stream.live = result.live;
         }
 

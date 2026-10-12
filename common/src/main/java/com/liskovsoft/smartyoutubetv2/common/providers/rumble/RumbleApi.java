@@ -404,13 +404,14 @@ public final class RumbleApi {
         throw new IOException(problems.length() > 0 ? problems.toString() : "no player id found");
     }
 
-    private static final java.util.Map<String, String> PLAYER_HLS = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.Map<String, List<String>> PLAYER_HLS = new java.util.concurrent.ConcurrentHashMap<>();
     private static final java.util.Set<String> PLAYER_HLS_TRIED = java.util.Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap<String, Boolean>());
 
     /**
-     * Some videos list only one small file (often 480p) in the embed data, while Rumble's own player offers every
-     * size through an adaptive (HLS) playlist it loads itself. When only a small file is known, let the embed page's
-     * player run once and take the adaptive playlist from what it loaded.
+     * Some videos list only small files (often 180p-480p) and a single-size playlist in the embed data, while
+     * Rumble's own player offers every size through an adaptive playlist it loads itself. When only small files are
+     * known, let the embed page's player run once and add the playlists it loaded; the picker keeps the one that
+     * lists the most sizes.
      */
     private static RumbleParser.Stream withPlayerHls(String embedId, String videoId, RumbleParser.Stream stream, long expectedSec) {
         if (stream.live) {
@@ -420,10 +421,6 @@ public final class RumbleApi {
         int tallestFile = 0;
 
         for (RumbleParser.Candidate c : stream.candidates) {
-            if (c.kind.equals("HLS")) {
-                return stream; // already has it
-            }
-
             tallestFile = Math.max(tallestFile, c.height);
         }
 
@@ -431,29 +428,40 @@ public final class RumbleApi {
             return stream; // a big file is known: nothing to gain
         }
 
-        String hls = PLAYER_HLS.get(videoId);
+        List<String> found = PLAYER_HLS.get(videoId);
 
-        if (hls == null && PLAYER_HLS_TRIED.add(videoId)) {
+        if (found == null && PLAYER_HLS_TRIED.add(videoId)) {
+            found = new java.util.ArrayList<>();
+
             try {
                 RumbleParser.Stream seen = RumbleParser.parseScrape(BrowserFetcher.scrape(SITE + "/embed/" + embedId + "/", PLAYER_SCRIPT, 25, true), expectedSec);
 
                 if (seen != null) {
                     for (RumbleParser.Candidate c : seen.candidates) {
                         if (c.kind.equals("HLS")) {
-                            hls = c.url;
-                            PLAYER_HLS.put(videoId, hls);
-                            break;
+                            found.add(c.url);
                         }
                     }
                 }
             } catch (IOException e) {
                 // keep what the embed data gave
             }
+
+            PLAYER_HLS.put(videoId, found);
         }
 
-        if (hls != null) {
-            stream.candidates.add(new RumbleParser.Candidate(hls, "HLS", 0));
-            stream.hlsUrl = hls;
+        if (found != null) {
+            for (String url : found) {
+                boolean known = false;
+
+                for (RumbleParser.Candidate c : stream.candidates) {
+                    known |= c.url.equals(url);
+                }
+
+                if (!known) {
+                    stream.candidates.add(new RumbleParser.Candidate(url, "HLS", 0));
+                }
+            }
         }
 
         return stream;
