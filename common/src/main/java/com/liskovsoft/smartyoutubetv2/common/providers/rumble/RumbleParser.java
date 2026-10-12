@@ -29,7 +29,7 @@ public final class RumbleParser {
     private static final Pattern CHANNEL_HREF = Pattern.compile("href=\"(?:https?://rumble\\.com)?/(c|user)/([^\"/?#]+)[^\"]*\"");
     private static final Pattern CHANNEL_ANCHOR = Pattern.compile("<a\\b[^>]*href=\"(?:https?://rumble\\.com)?/(c|user)/([^\"/?#]+)[^\"]*\"[^>]*>(.*?)</a>", Pattern.DOTALL);
     private static final Pattern IMG_TAG = Pattern.compile("<img\\b[^>]*>", Pattern.DOTALL);
-    private static final Pattern IMG_SRC = Pattern.compile("(?:data-src|src)=\"(https?:[^\"]+)\"");
+    private static final Pattern IMG_SRC = Pattern.compile("(?:data-src|data-lazy-src|src)=\"((?:https?:)?//[^\"]+)\"");
     private static final Pattern TITLE_H3 = Pattern.compile("<h3\\b[^>]*thumbnail__title[^>]*>(.*?)</h3>", Pattern.DOTALL);
     private static final Pattern ANY_H3 = Pattern.compile("<h3\\b[^>]*>(.*?)</h3>", Pattern.DOTALL);
     private static final Pattern DURATION = Pattern.compile("<span[^>]*duration[^>]*>\\s*((?:\\d+:)?\\d+:\\d{2})\\s*</span>");
@@ -352,26 +352,45 @@ public final class RumbleParser {
         }
 
         Matcher anchor = CHANNEL_ANCHOR.matcher(html);
+        java.util.Map<String, Integer> index = new java.util.HashMap<>();
 
         while (anchor.find()) {
             String channelId = anchor.group(1) + "/" + anchor.group(2);
             String inner = anchor.group(3);
             String thumb = firstImage(inner);
+
+            if (thumb == null) { // picture drawn as a CSS background
+                Matcher bg = CSS_URL.matcher(anchor.group());
+                thumb = bg.find() ? unescape(bg.group(1)).replaceFirst("^//", "https://") : null;
+            }
+
             String name = textOf(inner);
 
             if (thumb == null && name == null) {
                 continue;
             }
 
-            if (!seen.add(channelId)) {
+            Integer at = index.get(channelId);
+
+            if (at != null) { // a channel is often linked twice: once by its picture, once by its name
+                ProviderMediaItem have = result.get(at);
+
+                if (have.cardImageUrl == null && thumb != null) {
+                    ProviderMediaItem better = ProviderMediaItem.channel(channelId, have.title, thumb);
+                    result.set(at, better);
+                }
+
                 continue;
             }
 
+            index.put(channelId, result.size());
             result.add(ProviderMediaItem.channel(channelId, firstNonEmpty(name, anchor.group(2)), thumb));
         }
 
         return result;
     }
+
+    private static final Pattern CSS_URL = Pattern.compile("url\\([\"']?((?:https?:)?//[^\"')]+)[\"']?\\)");
 
     /**
      * Channel name and picture from the channel page header (Open Graph tags).
@@ -973,6 +992,7 @@ public final class RumbleParser {
             }
 
             String url = unescape(src.group(1));
+            url = url.startsWith("//") ? "https:" + url : url; // pictures written without a scheme
 
             if (tag.contains("thumbnail__image") || tag.contains("videostream__image")) {
                 return url;

@@ -165,7 +165,7 @@ public final class RumbleApi {
             + "  try{window.scrollTo(0,document.body.scrollHeight);}catch(e){}\n"
             + "  // wait until the list stops growing (more cards load while scrolling)\n"
             + "  var same=(w.__pn===list.length); w.__ps=same?((w.__ps||0)+1):0; w.__pn=list.length;\n"
-            + "  if((w.__ps>=3&&w.__pa>=5)||w.__pa>=12) return JSON.stringify({strategy:strategy,cards:list});\n"
+            + "  if((w.__ps>=2&&w.__pa>=3)||w.__pa>=12) return JSON.stringify({strategy:strategy,cards:list});\n"
             + "  return '';\n"
             + "})()\n";
 
@@ -199,6 +199,7 @@ public final class RumbleApi {
             + "var n=document.querySelectorAll('a[href^=\\\"/c/\\\"],a[href^=\\\"/user/\\\"]').length;"
             + "try{window.scrollTo(0,document.body.scrollHeight);}catch(e){}"
             + "var same=(w.__cn===n);w.__cs=same?((w.__cs||0)+1):0;w.__cn=n;"
+            + "if(n===0&&w.__cp>=4){return '<html></html>';}"
             + "if((n>0&&w.__cs>=3)||w.__cp>=14){return n>0?document.documentElement.outerHTML:'<html></html>';}"
             + "return '';})()";
 
@@ -300,6 +301,23 @@ public final class RumbleApi {
      * Like {@link #listing} but through the hidden browser, so the signed-in session cookies are sent.
      */
     public static List<RumbleParser.Entry> listingSignedIn(String path, int page) throws IOException {
+        String cacheKey = "signed:" + path + "#" + page;
+        Object[] cached = CACHE.get(cacheKey);
+
+        if (cached != null && System.currentTimeMillis() - (Long) cached[0] < 5 * 60 * 1000) {
+            return (List<RumbleParser.Entry>) cached[1];
+        }
+
+        List<RumbleParser.Entry> entries = listingSignedInNow(path, page);
+
+        if (!entries.isEmpty()) {
+            CACHE.put(cacheKey, new Object[]{System.currentTimeMillis(), entries});
+        }
+
+        return entries;
+    }
+
+    private static List<RumbleParser.Entry> listingSignedInNow(String path, int page) throws IOException {
         List<RumbleParser.Entry> entries;
 
         try {
@@ -350,7 +368,63 @@ public final class RumbleApi {
     }
 
     public static List<ProviderMediaItem> searchChannels(String text) throws IOException {
-        return RumbleParser.parseChannels(RumbleHttp.get("/search/channel?q=" + encode(text), SITE + "/", false));
+        List<ProviderMediaItem> found = RumbleParser.parseChannels(RumbleHttp.get("/search/channel?q=" + encode(text), SITE + "/", false));
+        fillChannelPictures(found);
+        return found;
+    }
+
+    /**
+     * The channel search page often shows no picture in its plain markup. Use pictures seen earlier, and ask the
+     * channel pages for the rest (a few at once, with a time limit), so the cards are not left blank.
+     */
+    private static void fillChannelPictures(List<ProviderMediaItem> channels) {
+        final java.util.List<java.util.concurrent.Future<ProviderMediaItem>> jobs = new java.util.ArrayList<>();
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(4);
+
+        try {
+            for (int i = 0; i < channels.size() && i < 16; i++) {
+                final ProviderMediaItem channel = channels.get(i);
+
+                if (channel.cardImageUrl != null) {
+                    continue;
+                }
+
+                String known = CHANNEL_THUMBS.get(channel.channelId);
+
+                if (known != null) {
+                    channel.cardImageUrl = known;
+                    channel.backgroundImageUrl = known;
+                    continue;
+                }
+
+                jobs.add(pool.submit(() -> channelInfo(channel.channelId)));
+            }
+
+            long end = System.currentTimeMillis() + 8000;
+            int slot = 0;
+
+            for (int i = 0; i < channels.size() && i < 16 && slot < jobs.size(); i++) {
+                ProviderMediaItem channel = channels.get(i);
+
+                if (channel.cardImageUrl != null) {
+                    continue;
+                }
+
+                try {
+                    ProviderMediaItem info = jobs.get(slot++).get(Math.max(100, end - System.currentTimeMillis()), java.util.concurrent.TimeUnit.MILLISECONDS);
+
+                    if (info != null && info.cardImageUrl != null) {
+                        channel.cardImageUrl = info.cardImageUrl;
+                        channel.backgroundImageUrl = info.cardImageUrl;
+                        CHANNEL_THUMBS.put(channel.channelId, info.cardImageUrl);
+                    }
+                } catch (Exception e) {
+                    // this one stays without a picture
+                }
+            }
+        } finally {
+            pool.shutdownNow();
+        }
     }
 
     /**

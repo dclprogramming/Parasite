@@ -166,6 +166,7 @@ public class RumbleContentService extends LocalContentBase {
 
     private static long sLastAccountSync;
     private static boolean sAccountSyncing;
+    private static boolean sListPagesUseless; // no page that lists the followed channels was found this run
 
     @Override
     protected MediaGroup channelsGroup(boolean sortByName) {
@@ -173,10 +174,11 @@ public class RumbleContentService extends LocalContentBase {
 
         if (isSignedIn()) {
             if (group.isEmpty()) { // first time: nothing saved yet, so wait for the account's channels once
-                syncAccountChannels();
+                syncAccountChannels(true); // a short first look, so the screen opens soon
                 group = (ProviderMediaGroup) super.channelsGroup(sortByName);
+                syncAccountChannelsInBackground(true); // the rest follows quietly
             } else {
-                syncAccountChannelsInBackground();
+                syncAccountChannelsInBackground(false);
             }
         }
 
@@ -189,7 +191,7 @@ public class RumbleContentService extends LocalContentBase {
      * Saves the channels seen in the signed-in account's subscription feed as follows. Opening the Channels list never
      * waits for this once there are saved channels.
      */
-    private void syncAccountChannels() {
+    private void syncAccountChannels(boolean quick) {
         synchronized (RumbleContentService.class) {
             sAccountSyncing = true;
         }
@@ -198,9 +200,14 @@ public class RumbleContentService extends LocalContentBase {
             java.util.Set<String> seen = new java.util.HashSet<>();
 
             // 1) A page that lists every followed channel (the feed below only shows channels that posted lately)
-            for (ProviderMediaItem channel : RumbleApi.followedChannelsSignedIn()) {
-                if (seen.add(channel.channelId)) {
-                    mStore.follow(channel);
+            if (!quick && !sListPagesUseless) {
+                List<ProviderMediaItem> listed = RumbleApi.followedChannelsSignedIn();
+                sListPagesUseless = listed.isEmpty();
+
+                for (ProviderMediaItem channel : listed) {
+                    if (seen.add(channel.channelId)) {
+                        mStore.follow(channel);
+                    }
                 }
             }
 
@@ -208,7 +215,11 @@ public class RumbleContentService extends LocalContentBase {
             // several pages in a row bring nothing new
             int quiet = 0;
 
-            for (int page = 1; page <= MAX_SYNC_PAGES && quiet < 3; page++) {
+            for (int page = 1; page <= (quick ? 3 : MAX_SYNC_PAGES) && quiet < (quick ? 2 : 3); page++) {
+                if (!quick) {
+                    BrowserFetcher.waitUntilIdle(60000); // screens that are loading come first
+                }
+
                 int before = seen.size();
                 List<RumbleParser.Entry> entries = RumbleApi.listingSignedIn("/subscriptions", page);
 
@@ -237,9 +248,9 @@ public class RumbleContentService extends LocalContentBase {
         }
     }
 
-    private void syncAccountChannelsInBackground() {
+    private void syncAccountChannelsInBackground(boolean force) {
         synchronized (RumbleContentService.class) {
-            if (sAccountSyncing || System.currentTimeMillis() - sLastAccountSync < 10 * 60 * 1000) {
+            if (sAccountSyncing || (!force && System.currentTimeMillis() - sLastAccountSync < 10 * 60 * 1000)) {
                 return;
             }
 
@@ -248,7 +259,7 @@ public class RumbleContentService extends LocalContentBase {
 
         new Thread(() -> {
             BrowserFetcher.waitUntilIdle(60000); // screens that are loading come first
-            syncAccountChannels();
+            syncAccountChannels(false);
         }).start();
     }
 

@@ -1216,7 +1216,8 @@ public class BrowsePresenter extends BasePresenter<BrowseView> implements Sectio
     }
 
     private void appendLocalHistory(VideoGroup videoGroup) {
-        if (!isHistorySection()) {
+        // The app's own watch log is shared by every provider: Twitch and Rumble keep their own history instead
+        if (!isHistorySection() || ProviderData.getSelected() != ProviderData.YOUTUBE) {
             return;
         }
 
