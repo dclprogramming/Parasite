@@ -420,6 +420,7 @@ public final class RumbleParser {
         return name == null || name.isEmpty() ? null : name;
     }
 
+    private static final Pattern LAZY_SRC = Pattern.compile("data-(?:lazy-)?src=\"((?:https?:)?//[^\"]+)\"");
     private static final Pattern CSS_URL = Pattern.compile("url\\([\"']?((?:https?:)?//[^\"')]+)[\"']?\\)");
 
     /**
@@ -1015,14 +1016,19 @@ public final class RumbleParser {
 
         while (tags.find()) {
             String tag = tags.group();
-            Matcher src = IMG_SRC.matcher(tag);
+            Matcher lazy = LAZY_SRC.matcher(tag); // the real picture, when "src" only holds a placeholder
+            Matcher src = lazy.find() ? lazy : IMG_SRC.matcher(tag);
 
-            if (!src.find()) {
+            if (src != lazy && !src.find()) {
                 continue;
             }
 
             String url = unescape(src.group(1));
             url = url.startsWith("//") ? "https:" + url : url; // pictures written without a scheme
+
+            if (url.matches("(?i).*(blank|placeholder|spacer|pixel|verified|badge|\\.svg|\\.gif)(\\?.*)?$")) {
+                continue; // not a channel picture
+            }
 
             if (tag.contains("thumbnail__image") || tag.contains("videostream__image")) {
                 return url;

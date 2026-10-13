@@ -374,8 +374,9 @@ public final class RumbleApi {
     }
 
     /**
-     * The channel search page often shows no picture in its plain markup. Use pictures seen earlier, and ask the
-     * channel pages for the rest (a few at once, with a time limit), so the cards are not left blank.
+     * The channel search page's plain markup often holds no picture, or only a placeholder. Use pictures seen
+     * earlier, and ask the channel pages for the rest (a few at once, with a time limit), so no card is left blank.
+     * A picture from a channel's own page wins over whatever the search page showed.
      */
     private static void fillChannelPictures(List<ProviderMediaItem> channels) {
         final java.util.List<java.util.concurrent.Future<ProviderMediaItem>> jobs = new java.util.ArrayList<>();
@@ -384,11 +385,6 @@ public final class RumbleApi {
         try {
             for (int i = 0; i < channels.size() && i < 16; i++) {
                 final ProviderMediaItem channel = channels.get(i);
-
-                if (channel.cardImageUrl != null) {
-                    continue;
-                }
-
                 String known = CHANNEL_THUMBS.get(channel.channelId);
 
                 if (known != null) {
@@ -406,8 +402,8 @@ public final class RumbleApi {
             for (int i = 0; i < channels.size() && i < 16 && slot < jobs.size(); i++) {
                 ProviderMediaItem channel = channels.get(i);
 
-                if (channel.cardImageUrl != null) {
-                    continue;
+                if (CHANNEL_THUMBS.get(channel.channelId) != null) {
+                    continue; // already filled from memory
                 }
 
                 try {

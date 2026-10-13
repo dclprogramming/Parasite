@@ -758,10 +758,10 @@ public final class TwitchApi {
         item.cardImageUrl = str(video, "previewThumbnailURL");
 
         // A broadcast that is still being recorded has no picture yet: Twitch answers with a "404 / processing"
-        // placeholder (or nothing). The channel's live preview is the right picture then.
+        // placeholder (or nothing). The channel's picture is used then.
         if ((item.cardImageUrl == null || item.cardImageUrl.contains("404_processing") || item.cardImageUrl.contains("/_404/"))
-                && vod.channelLogin != null) {
-            item.cardImageUrl = "https://static-cdn.jtvnw.net/previews-ttv/live_user_" + vod.channelLogin + "-640x360.jpg";
+                && vod.channelAvatar != null) {
+            item.cardImageUrl = vod.channelAvatar;
         }
 
         item.backgroundImageUrl = item.cardImageUrl;
