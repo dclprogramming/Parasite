@@ -364,7 +364,7 @@ public final class RumbleParser {
                 thumb = bg.find() ? unescape(bg.group(1)).replaceFirst("^//", "https://") : null;
             }
 
-            String name = textOf(inner);
+            String name = channelNameOf(inner);
 
             if (thumb == null && name == null) {
                 continue;
@@ -388,6 +388,36 @@ public final class RumbleParser {
         }
 
         return result;
+    }
+
+    /**
+     * A channel card's link often wraps the whole card ("Name Verified 19,438 Followers Description..."). The name is
+     * the first piece of text in it, without the "Verified" badge text.
+     */
+    private static String channelNameOf(String inner) {
+        if (inner == null) {
+            return null;
+        }
+
+        Matcher named = CHANNEL_NAME.matcher(inner);
+        String name = named.find() ? textOf(named.group(1)) : null;
+
+        if (name == null) {
+            for (String piece : inner.split("<[^>]*>")) {
+                String text = textOf(piece);
+
+                if (text != null) {
+                    name = text;
+                    break;
+                }
+            }
+        }
+
+        if (name != null) {
+            name = name.replaceAll("\\s*Verified$", "").trim();
+        }
+
+        return name == null || name.isEmpty() ? null : name;
     }
 
     private static final Pattern CSS_URL = Pattern.compile("url\\([\"']?((?:https?:)?//[^\"')]+)[\"']?\\)");
