@@ -376,7 +376,10 @@ public final class RumbleApi {
             + "var h=document.body.scrollHeight,vh=window.innerHeight||600,y=(w.__sp-1)*vh*0.7;"
             + "try{window.scrollTo(0,y);}catch(e){}"
             + "var n=document.querySelectorAll('a[href^=\\\"/c/\\\"],a[href^=\\\"/user/\\\"]').length;"
-            + "if(y>=h||w.__sp>=12){return n>0?document.documentElement.outerHTML:'<html></html>';}"
+            + "if(y>=h||w.__sp>=12){"
+            + "var els=document.querySelectorAll('[class*=user-image--img]');"
+            + "for(var k=0;k<els.length;k++){var bg=getComputedStyle(els[k]).backgroundImage;if(bg&&bg!=='none'){els[k].setAttribute('data-bg',bg);}}"
+            + "return n>0?document.documentElement.outerHTML:'<html></html>';}"
             + "return '';})()";
 
     public static List<ProviderMediaItem> searchChannels(String text) throws IOException {

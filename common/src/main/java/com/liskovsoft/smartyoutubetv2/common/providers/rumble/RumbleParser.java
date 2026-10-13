@@ -354,6 +354,16 @@ public final class RumbleParser {
         Matcher anchor = CHANNEL_ANCHOR.matcher(html);
         java.util.Map<String, Integer> index = new java.util.HashMap<>();
 
+        // Rumble draws channel pictures on <i class="user-image--img--id-N"> elements; the picture itself is a CSS
+        // rule for that class (".user-image--img--id-N { background-image: url(...) }")
+        java.util.Map<String, String> cssPictures = new java.util.LinkedHashMap<>();
+        Matcher rule = USER_IMAGE_RULE.matcher(html);
+
+        while (rule.find()) {
+            String picture = unescape(rule.group(2));
+            cssPictures.put(rule.group(1), picture.startsWith("//") ? "https:" + picture : picture);
+        }
+
         while (anchor.find()) {
             String channelId = anchor.group(1) + "/" + anchor.group(2);
             String inner = anchor.group(3);
@@ -362,6 +372,23 @@ public final class RumbleParser {
             if (thumb == null) { // picture drawn as a CSS background
                 Matcher bg = CSS_URL.matcher(anchor.group());
                 thumb = bg.find() ? unescape(bg.group(1)).replaceFirst("^//", "https://") : null;
+            }
+
+            if (thumb == null) { // the browser wrote the drawn picture into data-bg
+                Matcher drawn = DATA_BG.matcher(anchor.group());
+
+                if (drawn.find()) {
+                    Matcher bg = CSS_URL.matcher(unescape(drawn.group(1)));
+                    thumb = bg.find() ? bg.group(1).replaceFirst("^//", "https://") : null;
+                }
+            }
+
+            if (thumb == null && !cssPictures.isEmpty()) { // the picture is a CSS rule of the avatar's class
+                Matcher id = USER_IMAGE_ID.matcher(anchor.group());
+
+                if (id.find()) {
+                    thumb = cssPictures.get(id.group(1));
+                }
             }
 
             String name = channelNameOf(inner);
@@ -421,6 +448,9 @@ public final class RumbleParser {
     }
 
     private static final Pattern LAZY_SRC = Pattern.compile("data-(?:lazy-)?src=\"((?:https?:)?//[^\"]+)\"");
+    private static final Pattern USER_IMAGE_RULE = Pattern.compile("\\.user-image--img--id-(\\d+)\\s*\\{[^}]*?url\\(\\s*[\"']?((?:https?:)?//[^\"')\\s]+)");
+    private static final Pattern USER_IMAGE_ID = Pattern.compile("user-image--img--id-(\\d+)");
+    private static final Pattern DATA_BG = Pattern.compile("data-bg=\"([^\"]*)\"");
     private static final Pattern CSS_URL = Pattern.compile("url\\([\"']?((?:https?:)?//[^\"')]+)[\"']?\\)");
 
     /**
