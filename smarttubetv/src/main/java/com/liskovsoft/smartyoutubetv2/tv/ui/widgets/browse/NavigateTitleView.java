@@ -324,6 +324,10 @@ public class NavigateTitleView extends TitleView implements OnDataChange, Accoun
         Account current = MediaServiceManager.instance().getSelectedAccount();
 
         if (current != null && current.getAvatarImageUrl() != null) {
+            if (mNormalOrbColors != null) { // the avatar sits on the normal circle again
+                mAccountView.setOrbColors(mNormalOrbColors);
+            }
+
             loadIcon(mAccountView, current.getAvatarImageUrl(), false);
             String accountName = current.getName() != null ? current.getName() : current.getEmail();
             //TooltipCompatHandler.setTooltipText(mAccountView, Utils.updateTooltip(getContext(), accountName));
@@ -352,8 +356,9 @@ public class NavigateTitleView extends TitleView implements OnDataChange, Accoun
             icon = signedIn ? R.drawable.ic_provider_youtube : R.drawable.ic_provider_youtube_gray;
         }
 
-        // TRANSPARENT icon color = draw the logo as it is (no white tint)
-        mAccountView.setOrbColors(new Colors(mNormalOrbColors.color, mNormalOrbColors.brightColor, Color.TRANSPARENT));
+        // TRANSPARENT icon color = draw the logo as it is (no white tint).
+        // TRANSPARENT orb colors = no circle behind the logo, only the logo itself
+        mAccountView.setOrbColors(new Colors(Color.TRANSPARENT, Color.TRANSPARENT, Color.TRANSPARENT));
         mAccountView.setOrbIcon(ContextCompat.getDrawable(getContext(), icon));
     }
 
