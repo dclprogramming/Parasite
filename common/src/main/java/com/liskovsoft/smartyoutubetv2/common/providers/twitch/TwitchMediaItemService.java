@@ -6,6 +6,7 @@ import com.liskovsoft.mediaserviceinterfaces.data.MediaItemFormatInfo;
 import com.liskovsoft.mediaserviceinterfaces.data.MediaItemMetadata;
 import com.liskovsoft.sharedutils.rx.RxHelper;
 import com.liskovsoft.smartyoutubetv2.common.providers.HttpStatusException;
+import com.liskovsoft.smartyoutubetv2.common.providers.ProviderHttp;
 import com.liskovsoft.smartyoutubetv2.common.providers.LocalContentBase;
 import com.liskovsoft.smartyoutubetv2.common.providers.ProviderStore;
 import com.liskovsoft.smartyoutubetv2.common.providers.model.ProviderFormatInfo;
@@ -67,12 +68,52 @@ public class TwitchMediaItemService extends StubMediaItemService {
             return loadFormatInfoOrThrow(videoId);
         } catch (HttpStatusException e) {
             String reason = e.code == 401 || e.code == 403
-                    ? "Twitch refused the request (HTTP " + e.code + "). It may be asking for a sign-in or an integrity check"
+                    ? subscriptionReason(videoId, null)
                     : "Twitch: " + e.getMessage();
             return ProviderFormatInfo.unplayable(videoId, reason);
         } catch (IOException e) {
+            if (isForbidden(e)) {
+                return ProviderFormatInfo.unplayable(videoId, subscriptionReason(videoId, null));
+            }
+
             return ProviderFormatInfo.unplayable(videoId, e.getMessage() != null && e.getMessage().startsWith("Twitch") ? e.getMessage() : "Twitch: " + e.getMessage());
         }
+    }
+
+    /** Twitch answers 403 (sometimes 401) for streams and videos that only paying subscribers may watch. */
+    private static boolean isRestricted(String playlistUrl) {
+        int code = ProviderHttp.probe(playlistUrl);
+        return code == 403 || code == 401;
+    }
+
+    private static boolean isForbidden(Throwable error) {
+        for (Throwable t = error; t != null; t = t.getCause()) {
+            if (t instanceof HttpStatusException && (((HttpStatusException) t).code == 403 || ((HttpStatusException) t).code == 401)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** "Channel name requires a paid subscription". The channel name is looked up when the caller does not know it. */
+    private String subscriptionReason(String videoId, String channelName) {
+        String name = channelName;
+
+        try {
+            if (name == null && videoId != null && videoId.startsWith(TwitchApi.LIVE_PREFIX)) {
+                String login = videoId.substring(TwitchApi.LIVE_PREFIX.length());
+                TwitchApi.User user = TwitchApi.user(login);
+                name = user != null && user.displayName != null ? user.displayName : login;
+            } else if (name == null && videoId != null && videoId.startsWith(TwitchApi.VOD_PREFIX)) {
+                TwitchApi.Vod vod = TwitchApi.vod(videoId.substring(TwitchApi.VOD_PREFIX.length()));
+                name = vod != null ? vod.channelName : null;
+            }
+        } catch (IOException | RuntimeException e) {
+            // keep the generic wording below
+        }
+
+        return (name != null && !name.isEmpty() ? name : "This channel") + " requires a paid subscription";
     }
 
     private MediaItemFormatInfo loadFormatInfoOrThrow(String videoId) throws IOException {
@@ -93,6 +134,11 @@ public class TwitchMediaItemService extends StubMediaItemService {
             }
 
             String url = TwitchApi.liveUrl(login);
+
+            if (isRestricted(url)) {
+                return ProviderFormatInfo.unplayable(videoId, subscriptionReason(videoId, user.displayName));
+            }
+
             mStore.addToHistory(user.live);
 
             return ProviderFormatInfo.playable(videoId, url)
@@ -109,6 +155,11 @@ public class TwitchMediaItemService extends StubMediaItemService {
             }
 
             String url = TwitchApi.vodUrl(id);
+
+            if (isRestricted(url)) {
+                return ProviderFormatInfo.unplayable(videoId, subscriptionReason(videoId, vod.channelName));
+            }
+
             mStore.addToHistory(vod.item);
 
             return ProviderFormatInfo.playable(videoId, url)
