@@ -367,60 +367,44 @@ public final class RumbleApi {
         return html.contains("/logout") || html.contains("sign out") || html.contains("log out");
     }
 
-    public static List<ProviderMediaItem> searchChannels(String text) throws IOException {
-        List<ProviderMediaItem> found = RumbleParser.parseChannels(RumbleHttp.get("/search/channel?q=" + encode(text), SITE + "/", false));
-        fillChannelPictures(found);
-        return found;
-    }
-
     /**
-     * The channel search page's plain markup often holds no picture, or only a placeholder. Use pictures seen
-     * earlier, and ask the channel pages for the rest (a few at once, with a time limit), so no card is left blank.
-     * A picture from a channel's own page wins over whatever the search page showed.
+     * Scrolls the page down in steps (so lazily loaded pictures get loaded), then returns the page markup.
+     * Plain requests cannot be used for pictures: Rumble refuses them, and the page fills pictures in with scripts.
      */
-    private static void fillChannelPictures(List<ProviderMediaItem> channels) {
-        final java.util.List<java.util.concurrent.Future<ProviderMediaItem>> jobs = new java.util.ArrayList<>();
-        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(4);
+    private static final String SEARCH_CHANNELS_SCRIPT = "(function(){var w=window;w.__sp=(w.__sp||0)+1;"
+            + "if(/just a moment|attention required/i.test(document.title||'')) return '';"
+            + "var h=document.body.scrollHeight,vh=window.innerHeight||600,y=(w.__sp-1)*vh*0.7;"
+            + "try{window.scrollTo(0,y);}catch(e){}"
+            + "var n=document.querySelectorAll('a[href^=\\\"/c/\\\"],a[href^=\\\"/user/\\\"]').length;"
+            + "if(y>=h||w.__sp>=12){return n>0?document.documentElement.outerHTML:'<html></html>';}"
+            + "return '';})()";
+
+    public static List<ProviderMediaItem> searchChannels(String text) throws IOException {
+        String url = SITE + "/search/channel?q=" + encode(text);
+        List<ProviderMediaItem> found;
 
         try {
-            for (int i = 0; i < channels.size() && i < 16; i++) {
-                final ProviderMediaItem channel = channels.get(i);
-                String known = CHANNEL_THUMBS.get(channel.channelId);
-
-                if (known != null) {
-                    channel.cardImageUrl = known;
-                    channel.backgroundImageUrl = known;
-                    continue;
-                }
-
-                jobs.add(pool.submit(() -> channelInfo(channel.channelId)));
-            }
-
-            long end = System.currentTimeMillis() + 8000;
-            int slot = 0;
-
-            for (int i = 0; i < channels.size() && i < 16 && slot < jobs.size(); i++) {
-                ProviderMediaItem channel = channels.get(i);
-
-                if (CHANNEL_THUMBS.get(channel.channelId) != null) {
-                    continue; // already filled from memory
-                }
-
-                try {
-                    ProviderMediaItem info = jobs.get(slot++).get(Math.max(100, end - System.currentTimeMillis()), java.util.concurrent.TimeUnit.MILLISECONDS);
-
-                    if (info != null && info.cardImageUrl != null) {
-                        channel.cardImageUrl = info.cardImageUrl;
-                        channel.backgroundImageUrl = info.cardImageUrl;
-                        CHANNEL_THUMBS.put(channel.channelId, info.cardImageUrl);
-                    }
-                } catch (Exception e) {
-                    // this one stays without a picture
-                }
-            }
-        } finally {
-            pool.shutdownNow();
+            found = RumbleParser.parseChannels(BrowserFetcher.scrape(url, SEARCH_CHANNELS_SCRIPT, 25, false));
+        } catch (IOException e) {
+            found = java.util.Collections.emptyList();
         }
+
+        if (found.isEmpty()) { // the browser got nothing: fall back to the plain page
+            found = RumbleParser.parseChannels(RumbleHttp.get("/search/channel?q=" + encode(text), SITE + "/", false));
+        }
+
+        for (ProviderMediaItem channel : found) { // pictures seen before fill the gaps
+            String known = CHANNEL_THUMBS.get(channel.channelId);
+
+            if (channel.cardImageUrl == null && known != null) {
+                channel.cardImageUrl = known;
+                channel.backgroundImageUrl = known;
+            } else if (channel.cardImageUrl != null) {
+                CHANNEL_THUMBS.put(channel.channelId, channel.cardImageUrl);
+            }
+        }
+
+        return found;
     }
 
     /**
