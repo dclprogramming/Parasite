@@ -291,9 +291,12 @@ public final class RumbleApi {
      */
     public static List<RumbleParser.Entry> topOfWeek(String path) throws IOException {
         long since = System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000;
-        List<RumbleParser.Entry> pool = new ArrayList<>();
+        List<RumbleParser.Entry> recent = new ArrayList<>(); // published within the week
+        List<RumbleParser.Entry> any = new ArrayList<>();    // whatever was read, if the week turns out empty
         java.util.Set<String> seen = new java.util.HashSet<>();
         RumbleParser.Entry sample = null;
+        StringBuilder facts = new StringBuilder();
+        int total = 0, live = 0, withViews = 0, older = 0;
 
         for (int page = 1; page <= WEEK_PAGES; page++) {
             List<RumbleParser.Entry> entries;
@@ -319,10 +322,32 @@ public final class RumbleApi {
             }
 
             for (RumbleParser.Entry entry : entries) {
+                total++;
+
+                if (facts.length() < 400) {
+                    facts.append(entry.live ? "live" : "video").append(" views=").append(entry.views)
+                            .append(" age=").append(entry.publishedMs > 0 ? (System.currentTimeMillis() - entry.publishedMs) / 3_600_000 + "h" : "?").append("; ");
+                }
+
+                if (entry.live) {
+                    live++;
+                }
+
+                if (entry.views > 0) {
+                    withViews++;
+                }
+
                 if (entry.publishedMs > 0 && entry.publishedMs < since) {
+                    older++;
                     reachedOlder = true;
-                } else if (entry.views > 0 && !entry.live && seen.add(entry.id)) {
-                    pool.add(entry);
+                }
+
+                if (entry.views > 0 && !entry.live && seen.add(entry.id)) {
+                    any.add(entry);
+
+                    if (entry.publishedMs <= 0 || entry.publishedMs >= since) {
+                        recent.add(entry);
+                    }
                 }
             }
 
@@ -331,8 +356,11 @@ public final class RumbleApi {
             }
         }
 
+        List<RumbleParser.Entry> pool = !recent.isEmpty() ? recent : any; // a quiet category: the most viewed of what it has
+
         if (pool.isEmpty() && sample != null) {
-            RumbleDebug.noViews(path, sample); // the cards show no view count the page script can read: say what a card looks like
+            RumbleDebug.noViews(path, sample, "cards read " + total + ", live " + live + ", with a view count " + withViews
+                    + ", older than a week " + older + ". First cards: " + facts);
         }
 
         Collections.sort(pool, (a, b) -> Long.compare(b.views, a.views));

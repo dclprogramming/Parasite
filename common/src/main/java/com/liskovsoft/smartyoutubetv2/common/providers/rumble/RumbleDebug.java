@@ -115,7 +115,7 @@ final class RumbleDebug {
      * "Top this week" needs the view count of each card. When none can be read, show (once per run) what a card looks like,
      * so the page script can be taught where the count is. Call from any thread.
      */
-    static void noViews(String path, RumbleParser.Entry sample) {
+    static void noViews(String path, RumbleParser.Entry sample, String facts) {
         synchronized (RumbleDebug.class) {
             if (sNoViewsShown) {
                 return;
@@ -125,7 +125,7 @@ final class RumbleDebug {
         }
 
         StringBuilder text = new StringBuilder();
-        text.append("No view count could be read from the cards of ").append(path).append(".\n\n");
+        text.append("No usable view count on the cards of ").append(path).append(".\n").append(facts).append("\n\n");
         text.append("Card: ").append(sample.html != null && sample.html.length() > 650 ? sample.html.substring(0, 650) : sample.html).append("\n\n");
 
         if (sample.shadow != null) {
