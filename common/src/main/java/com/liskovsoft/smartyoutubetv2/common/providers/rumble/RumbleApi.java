@@ -282,7 +282,7 @@ public final class RumbleApi {
         }
     }
 
-    private static final int WEEK_PAGES = 3;
+    private static final int WEEK_PAGES = 4;
     private static final int WEEK_TOP_COUNT = 30;
 
     /**
@@ -337,7 +337,9 @@ public final class RumbleApi {
                     withViews++;
                 }
 
-                if (entry.publishedMs > 0 && entry.publishedMs < since) {
+                // A live stream keeps the time it went live (it can be weeks old) and is listed first: it says nothing about
+                // how far back the list reaches
+                if (!entry.live && entry.publishedMs > 0 && entry.publishedMs < since) {
                     older++;
                     reachedOlder = true;
                 }

@@ -61,6 +61,7 @@ public final class RumblePreloader {
 
             paths.add(path + "#2"); // "Top this week" is built from the first pages of the category
             paths.add(path + "#3");
+            paths.add(path + "#4");
         }
 
         return paths;
