@@ -292,6 +292,7 @@ public final class RumbleApi {
         long since = System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000;
         List<RumbleParser.Entry> pool = new ArrayList<>();
         java.util.Set<String> seen = new java.util.HashSet<>();
+        RumbleParser.Entry sample = null;
 
         for (int page = 1; page <= WEEK_PAGES; page++) {
             List<RumbleParser.Entry> entries;
@@ -312,6 +313,10 @@ public final class RumbleApi {
 
             boolean reachedOlder = false;
 
+            if (sample == null && entries.get(0).html != null) {
+                sample = entries.get(0);
+            }
+
             for (RumbleParser.Entry entry : entries) {
                 if (entry.publishedMs > 0 && entry.publishedMs < since) {
                     reachedOlder = true;
@@ -323,6 +328,10 @@ public final class RumbleApi {
             if (reachedOlder || entries.size() < MIN_FULL_PAGE) {
                 break; // the list is older than a week from here on
             }
+        }
+
+        if (pool.isEmpty() && sample != null) {
+            RumbleDebug.noViews(path, sample); // the cards show no view count the page script can read: say what a card looks like
         }
 
         Collections.sort(pool, (a, b) -> Long.compare(b.views, a.views));
