@@ -332,11 +332,6 @@ public final class RumbleApi {
         return page > 1 ? path + (path.contains("?") ? "&" : "?") + "page=" + page : path;
     }
 
-    /** The signed-in lists are the account's own: never saved to disk. */
-    private static List<RumbleParser.Entry> renderedListing(String path, int page) throws IOException {
-        return RumbleParser.parseRendered(BrowserFetcher.scrape(SITE + pagedPath(path, page), EXTRACT_SCRIPT, 22, false));
-    }
-
     private static List<RumbleParser.Entry> renderedListing(String path, int page, boolean background) throws IOException {
         String rendered = BrowserFetcher.scrape(SITE + pagedPath(path, page), EXTRACT_SCRIPT, 22, false, background);
         List<RumbleParser.Entry> entries = RumbleParser.parseRendered(rendered);
@@ -352,13 +347,15 @@ public final class RumbleApi {
 
     private static final long STORED_MAX_MS = 12L * 60 * 60 * 1000;
 
-    private static java.io.File storeDir() {
+    private static final long STORED_MAX_SIGNED_MS = 3L * 60 * 60 * 1000;
+
+    private static java.io.File storeDir(String key) {
         android.content.Context context = com.liskovsoft.smartyoutubetv2.common.prefs.ProviderData.getAppContext();
-        return context != null ? new java.io.File(context.getCacheDir(), "rumble-lists") : null;
+        return context != null ? new java.io.File(context.getCacheDir(), key.startsWith("signed:") ? "rumble-signed" : "rumble-lists") : null;
     }
 
     private static java.io.File storeFile(String key) {
-        java.io.File dir = storeDir();
+        java.io.File dir = storeDir(key);
         return dir != null ? new java.io.File(dir, Integer.toHexString(key.hashCode()) + "_" + key.length() + ".txt") : null;
     }
 
@@ -432,7 +429,7 @@ public final class RumbleApi {
 
             long savedAt = Long.parseLong(all.substring(first + 1, second));
 
-            if (System.currentTimeMillis() - savedAt > STORED_MAX_MS) {
+            if (System.currentTimeMillis() - savedAt > (key.startsWith("signed:") ? STORED_MAX_SIGNED_MS : STORED_MAX_MS)) {
                 return null;
             }
 
@@ -489,54 +486,146 @@ public final class RumbleApi {
         return "/search/video?q=" + encode(text);
     }
 
-    /**
-     * Like {@link #listing} but through the hidden browser, so the signed-in session cookies are sent.
-     */
-    public static List<RumbleParser.Entry> listingSignedIn(String path, int page) throws IOException {
-        String cacheKey = "signed:" + path + "#" + page;
-        Object[] cached = CACHE.get(cacheKey);
+    // The signed-in account's own lists (subscriptions): through the hidden browser, so the session cookies are sent.
+    // Saved on the device like the public lists, and wiped by clearSignedStore() when the account changes.
 
-        if (cached != null && System.currentTimeMillis() - (Long) cached[0] < 5 * 60 * 1000) {
+    private static final long SIGNED_FRESH_MS = 5 * 60 * 1000;
+
+    public static List<RumbleParser.Entry> listingSignedIn(String path, int page) throws IOException {
+        String key = "signed:" + path + "#" + page;
+        Object[] cached = CACHE.get(key);
+
+        if (cached != null && System.currentTimeMillis() - (Long) cached[0] < SIGNED_FRESH_MS) {
             return (List<RumbleParser.Entry>) cached[1];
         }
 
-        List<RumbleParser.Entry> entries = listingSignedInNow(path, page);
+        Object[] stored = readStored(key); // seen before, even in an earlier run: show at once, renew quietly
+
+        if (stored != null) {
+            CACHE.put(key, stored);
+
+            if (System.currentTimeMillis() - (Long) stored[0] >= SIGNED_FRESH_MS) {
+                refreshSignedInBackground(path, page);
+            }
+
+            return (List<RumbleParser.Entry>) stored[1];
+        }
+
+        return signedNow(path, page, false);
+    }
+
+    /** Fresh data for background jobs (never served from an old saved copy). Cancelled when a screen needs the browser. */
+    public static List<RumbleParser.Entry> listingSignedInBackground(String path, int page) throws IOException {
+        String key = "signed:" + path + "#" + page;
+        Object[] cached = CACHE.get(key);
+
+        if (cached != null && System.currentTimeMillis() - (Long) cached[0] < SIGNED_FRESH_MS) {
+            return (List<RumbleParser.Entry>) cached[1];
+        }
+
+        return signedNow(path, page, true);
+    }
+
+    /** Keeps page 1 of an account list saved and recent, at low priority. @return false when it could not be loaded now */
+    public static boolean preloadSigned(String path) {
+        String key = "signed:" + path + "#1";
+        Object[] cached = CACHE.get(key);
+
+        if (cached != null && System.currentTimeMillis() - (Long) cached[0] < SIGNED_FRESH_MS) {
+            return true;
+        }
+
+        try {
+            signedNow(path, 1, true);
+            return true;
+        } catch (IOException | RuntimeException e) {
+            return false;
+        }
+    }
+
+    private static void refreshSignedInBackground(String path, int page) {
+        String key = "signed:" + path + "#" + page;
+
+        if (!REFRESHING.add(key)) {
+            return;
+        }
+
+        Thread thread = new Thread(() -> {
+            try {
+                BrowserFetcher.waitUntilIdle(20_000);
+                signedNow(path, page, true);
+            } catch (IOException | RuntimeException e) {
+                // the saved copy stays in use
+            } finally {
+                REFRESHING.remove(key);
+            }
+        }, "RumbleSignedRefresh");
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    private static List<RumbleParser.Entry> signedNow(String path, int page, boolean background) throws IOException {
+        String key = "signed:" + path + "#" + page;
+        List<RumbleParser.Entry> entries;
+
+        try {
+            String rendered = BrowserFetcher.scrape(SITE + pagedPath(path, page), EXTRACT_SCRIPT, 22, false, background);
+            entries = RumbleParser.parseRendered(rendered);
+
+            if (!entries.isEmpty()) {
+                store(key, rendered);
+            }
+        } catch (IOException e) {
+            if (background) {
+                throw e;
+            }
+
+            entries = RumbleParser.parseListing(RumbleHttp.getWithSession(pagedPath(path, page)));
+        }
+
+        remember(entries);
 
         if (!entries.isEmpty()) {
-            CACHE.put(cacheKey, new Object[]{System.currentTimeMillis(), entries});
+            CACHE.put(key, new Object[]{System.currentTimeMillis(), entries});
         }
 
         return entries;
     }
 
-    private static List<RumbleParser.Entry> listingSignedInNow(String path, int page) throws IOException {
-        List<RumbleParser.Entry> entries;
-
-        try {
-            entries = renderedListing(path, page); // the hidden browser holds the login cookies
-        } catch (IOException e) {
-            entries = RumbleParser.parseListing(RumbleHttp.getWithSession(pagedPath(path, page)));
-        }
-
-        for (RumbleParser.Entry entry : entries) {
-            if (entry.channelId != null && entry.channelThumb != null) {
-                CHANNEL_THUMBS.put(entry.channelId, entry.channelThumb);
+    /** Forgets everything saved from the signed-in account (sign-out or a new sign-in). */
+    public static void clearSignedStore() {
+        for (String key : new java.util.ArrayList<>(CACHE.keySet())) {
+            if (key.startsWith("signed:")) {
+                CACHE.remove(key);
             }
         }
 
-        return entries;
+        java.io.File dir = storeDir("signed:");
+        java.io.File[] files = dir != null ? dir.listFiles() : null;
+
+        if (files != null) {
+            for (java.io.File file : files) {
+                file.delete();
+            }
+        }
+
+        android.content.Context context = com.liskovsoft.smartyoutubetv2.common.prefs.ProviderData.getAppContext();
+
+        if (context != null) {
+            context.getSharedPreferences("rumble_sync", android.content.Context.MODE_PRIVATE).edit().clear().apply();
+        }
     }
 
     /**
      * Channels the signed-in account follows, read from a page that lists them (as opposed to the video feed, which
      * only shows channels that posted lately). Empty when no such page could be read.
      */
-    public static List<ProviderMediaItem> followedChannelsSignedIn() {
+    public static List<ProviderMediaItem> followedChannelsSignedIn(boolean background) throws IOException {
         java.util.Map<String, ProviderMediaItem> found = new java.util.LinkedHashMap<>();
 
         for (String path : new String[]{"/subscriptions/channels", "/account/subscriptions", "/account/following"}) {
             try {
-                String html = BrowserFetcher.scrape(SITE + path, CHANNELS_SCRIPT, 25, false);
+                String html = BrowserFetcher.scrape(SITE + path, CHANNELS_SCRIPT, 25, false, background);
 
                 for (ProviderMediaItem channel : RumbleParser.parseChannels(html)) {
                     if (channel.channelId != null && !found.containsKey(channel.channelId)) {
@@ -544,6 +633,9 @@ public final class RumbleApi {
                     }
                 }
             } catch (IOException e) {
+                if (background && BrowserFetcher.isSuperseded(e)) {
+                    throw e; // a screen needed the browser: the caller waits and tries again
+                }
                 // try the next page
             }
         }

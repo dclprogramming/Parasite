@@ -162,6 +162,11 @@ public final class BrowserFetcher {
         }
     }
 
+    /** Was this background request stopped because a screen needed the browser? */
+    public static boolean isSuperseded(IOException e) {
+        return e != null && e.getMessage() != null && e.getMessage().startsWith("Superseded");
+    }
+
     /** Starts the hidden browser and passes the site's browser check ahead of time, so the first screen opens sooner. */
     public static void warmUp(String origin) {
         try {

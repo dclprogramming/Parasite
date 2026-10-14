@@ -1,6 +1,8 @@
 package com.liskovsoft.smartyoutubetv2.common.providers.rumble;
 
+import com.liskovsoft.smartyoutubetv2.common.prefs.ProviderData;
 import com.liskovsoft.smartyoutubetv2.common.providers.BrowserFetcher;
+import com.liskovsoft.smartyoutubetv2.common.providers.ProviderAuth;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -13,7 +15,14 @@ import java.util.List;
 public final class RumblePreloader {
     private static boolean sStarted;
 
+    private static final String SUBSCRIPTIONS = "/subscriptions";
+
     private RumblePreloader() {
+    }
+
+    private static boolean signedIn() {
+        android.content.Context context = ProviderData.getAppContext();
+        return context != null && ProviderAuth.isSignedIn(context, ProviderData.RUMBLE);
     }
 
     public static synchronized void start() {
@@ -57,6 +66,14 @@ public final class RumblePreloader {
 
             List<String> failed = new ArrayList<>();
 
+            if (signedIn()) { // the account's own feed matters most: first
+                BrowserFetcher.waitUntilIdle(60_000);
+
+                if (!RumbleApi.preloadSigned(SUBSCRIPTIONS)) {
+                    failed.add(null);
+                }
+            }
+
             for (String path : paths()) {
                 BrowserFetcher.waitUntilIdle(60_000); // never in the way of a screen
 
@@ -67,7 +84,21 @@ public final class RumblePreloader {
 
             for (String path : failed) { // once more: those that were stopped by a screen
                 BrowserFetcher.waitUntilIdle(60_000);
-                RumbleApi.preload(path);
+
+                if (path == null) {
+                    RumbleApi.preloadSigned(SUBSCRIPTIONS);
+                } else {
+                    RumbleApi.preload(path);
+                }
+            }
+
+            while (true) { // keep the account's feed recent while the app stays open
+                Thread.sleep(15 * 60_000L);
+
+                if (signedIn()) {
+                    BrowserFetcher.waitUntilIdle(60_000);
+                    RumbleApi.preloadSigned(SUBSCRIPTIONS);
+                }
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();

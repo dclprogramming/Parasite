@@ -218,6 +218,10 @@ public final class ProviderLogin {
             // Keep the page-based guess
         }
 
+        if (signedIn) {
+            RumbleApi.clearSignedStore(); // lists saved for an earlier account must not show up
+        }
+
         ProviderAuth.setSignedIn(context, ProviderData.RUMBLE, signedIn);
         return signedIn ? "Signed in to Rumble." : "Rumble sign-in not detected. Sign in on the page, then press Back.";
     }

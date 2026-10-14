@@ -201,7 +201,7 @@ public class RumbleContentService extends LocalContentBase {
 
             // 1) A page that lists every followed channel (the feed below only shows channels that posted lately)
             if (!quick && !sListPagesUseless) {
-                List<ProviderMediaItem> listed = RumbleApi.followedChannelsSignedIn();
+                List<ProviderMediaItem> listed = followedChannelsPatiently();
                 sListPagesUseless = listed.isEmpty();
 
                 for (ProviderMediaItem channel : listed) {
@@ -221,7 +221,7 @@ public class RumbleContentService extends LocalContentBase {
                 }
 
                 int before = seen.size();
-                List<RumbleParser.Entry> entries = RumbleApi.listingSignedIn("/subscriptions", page);
+                List<RumbleParser.Entry> entries = quick ? RumbleApi.listingSignedIn("/subscriptions", page) : feedPagePatiently(page);
 
                 if (entries.isEmpty()) {
                     break;
@@ -239,6 +239,10 @@ public class RumbleContentService extends LocalContentBase {
             synchronized (RumbleContentService.class) {
                 sLastAccountSync = System.currentTimeMillis();
             }
+
+            if (!quick) {
+                saveFullSyncTime();
+            }
         } catch (IOException e) {
             // Try again next time
         } finally {
@@ -248,9 +252,53 @@ public class RumbleContentService extends LocalContentBase {
         }
     }
 
+    private static final long FULL_SYNC_EVERY_MS = 6L * 60 * 60 * 1000; // follows rarely change: no need to read dozens of pages on every start
+
+    private static long lastFullSyncTime() {
+        android.content.Context context = ProviderData.getAppContext();
+        return context != null ? context.getSharedPreferences("rumble_sync", android.content.Context.MODE_PRIVATE).getLong("last_full", 0) : 0;
+    }
+
+    private static void saveFullSyncTime() {
+        android.content.Context context = ProviderData.getAppContext();
+
+        if (context != null) {
+            context.getSharedPreferences("rumble_sync", android.content.Context.MODE_PRIVATE).edit().putLong("last_full", System.currentTimeMillis()).apply();
+        }
+    }
+
+    /** A page of the account's feed for the background sync: when a screen needs the browser, wait for it and try again. */
+    private List<RumbleParser.Entry> feedPagePatiently(int page) throws IOException {
+        for (int attempt = 0; ; attempt++) {
+            try {
+                return RumbleApi.listingSignedInBackground("/subscriptions", page);
+            } catch (IOException e) {
+                if (!BrowserFetcher.isSuperseded(e) || attempt >= 3) {
+                    throw e;
+                }
+
+                BrowserFetcher.waitUntilIdle(60000);
+            }
+        }
+    }
+
+    private List<ProviderMediaItem> followedChannelsPatiently() throws IOException {
+        for (int attempt = 0; ; attempt++) {
+            try {
+                return RumbleApi.followedChannelsSignedIn(true);
+            } catch (IOException e) {
+                if (!BrowserFetcher.isSuperseded(e) || attempt >= 3) {
+                    throw e;
+                }
+
+                BrowserFetcher.waitUntilIdle(60000);
+            }
+        }
+    }
+
     private void syncAccountChannelsInBackground(boolean force) {
         synchronized (RumbleContentService.class) {
-            if (sAccountSyncing || (!force && System.currentTimeMillis() - sLastAccountSync < 10 * 60 * 1000)) {
+            if (sAccountSyncing || (!force && System.currentTimeMillis() - lastFullSyncTime() < FULL_SYNC_EVERY_MS)) {
                 return;
             }
 

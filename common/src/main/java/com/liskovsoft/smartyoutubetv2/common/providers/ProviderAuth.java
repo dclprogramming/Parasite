@@ -72,6 +72,10 @@ public final class ProviderAuth {
             setTwitchToken(context, null);
         }
 
+        if (provider == ProviderData.RUMBLE) {
+            com.liskovsoft.smartyoutubetv2.common.providers.rumble.RumbleApi.clearSignedStore(); // the account's saved lists go with it
+        }
+
         String site = siteOf(provider);
         CookieManager cookies = CookieManager.getInstance();
         String all = cookies.getCookie(site);
