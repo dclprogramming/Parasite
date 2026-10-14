@@ -3,11 +3,11 @@ package com.liskovsoft.smartyoutubetv2.tv.ui.browse.providers;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
-import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -29,7 +29,7 @@ public class ProvidersFragment extends Fragment implements BrowseSupportFragment
     private static final int BASE_COLOR = 0xFF17142E;
     private static final int[] BRAND_COLORS = {0xFFFF0033, 0xFF85C742, 0xFF9146FF};
     private static final int[] NAMES = {R.string.provider_youtube, R.string.provider_rumble, R.string.provider_twitch};
-    private static final String[] LETTERS = {"Y", "R", "T"};
+    private static final int[] LOGOS = {R.drawable.ic_provider_card_youtube, R.drawable.ic_provider_rumble, R.drawable.ic_provider_twitch};
 
     private final BrowseSupportFragment.MainFragmentAdapter<Fragment> mMainFragmentAdapter =
             new BrowseSupportFragment.MainFragmentAdapter<Fragment>(this);
@@ -241,14 +241,9 @@ public class ProvidersFragment extends Fragment implements BrowseSupportFragment
         }
         card.setBackground(bg);
 
-        // Round emblem with the provider's initial
-        TextView badge = card.findViewById(R.id.provider_badge);
-        GradientDrawable badgeBg = new GradientDrawable();
-        badgeBg.setShape(GradientDrawable.OVAL);
-        badgeBg.setColor(brand);
-        badge.setBackground(badgeBg);
-        badge.setText(LETTERS[provider]);
-        badge.setGravity(Gravity.CENTER);
+        // The provider's logo
+        ImageView badge = card.findViewById(R.id.provider_badge);
+        badge.setImageResource(LOGOS[provider]);
 
         TextView name = card.findViewById(R.id.provider_name);
         name.setText(NAMES[provider]);

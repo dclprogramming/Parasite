@@ -92,7 +92,7 @@ public class RumbleContentService extends LocalContentBase {
         String path = RumbleApi.categoryPath(category);
         List<Row> rows = new ArrayList<>();
         rows.add(new Row("Latest", path));
-        rows.add(new Row("Top today", path + "?sort=views&date=today"));
+        rows.add(new Row("Top this week", path + "?sort=views&date=this-week")); // "today" was the same videos as Latest: a category gets fewer uploads a day than a row shows
         return rows;
     }
 

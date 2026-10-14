@@ -296,6 +296,7 @@ public class VideoLoaderController extends BasePlayerController {
                 // A notice (e.g. paid subscription needed): message at the bottom, the title stays, no skipping to the next video
                 MessageHelpers.showLongMessage(getContext(), formatInfo.getPlayabilityReason());
                 player.showProgressBar(false);
+                mSuggestionsController.loadSuggestions(getVideo()); // loads the channel details too: the Subscribe button works
                 bgImageUrl = getVideo().getBackgroundUrl();
                 player.showOverlay(true);
             } else {

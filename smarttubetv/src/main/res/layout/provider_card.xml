@@ -11,15 +11,12 @@
     android:focusableInTouchMode="true"
     android:clickable="true">
 
-    <TextView
+    <ImageView
         android:id="@+id/provider_badge"
-        android:layout_width="78dp"
-        android:layout_height="78dp"
-        android:gravity="center"
-        android:textColor="#FFFFFF"
-        android:textSize="36sp"
-        android:textStyle="bold"
-        android:fontFamily="sans-serif-medium" />
+        android:layout_width="96dp"
+        android:layout_height="96dp"
+        android:scaleType="fitCenter"
+        android:importantForAccessibility="no" />
 
     <TextView
         android:id="@+id/provider_name"

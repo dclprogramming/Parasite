@@ -53,7 +53,7 @@ public final class RumblePreloader {
                 paths.add(path);
             }
 
-            paths.add(path + "?sort=views&date=today");
+            paths.add(path + "?sort=views&date=this-week");
         }
 
         return paths;

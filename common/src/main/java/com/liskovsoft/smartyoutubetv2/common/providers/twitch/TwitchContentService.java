@@ -316,39 +316,67 @@ public class TwitchContentService extends LocalContentBase {
         return group;
     }
 
-    // Subscriptions (followed channels that are live now)
+    // Subscriptions: what the followed channels streamed or uploaded during the last 30 days (live now included), newest first
+
+    private static final long FEED_DAYS_MS = 30L * 24 * 60 * 60 * 1000;
+    private static final long FEED_CACHE_MS = 3 * 60_000;
+    private List<ProviderMediaItem> mFeed;
+    private long mFeedAt;
+    private List<String> mFeedLogins;
 
     @Override
     public Observable<MediaGroup> getSubscriptionsObserve() {
         return RxHelper.fromCallable(() -> {
-            ProviderMediaGroup group = new ProviderMediaGroup(MediaGroup.TYPE_SUBSCRIPTIONS, "Followed channels live now");
+            ProviderMediaGroup group = new ProviderMediaGroup(MediaGroup.TYPE_SUBSCRIPTIONS, "Followed channels: last 30 days");
             List<String> logins = followedLogins();
 
             if (logins.isEmpty()) {
                 return group;
             }
 
-            List<ProviderMediaItem> live = new ArrayList<>();
-
-            for (TwitchApi.User user : TwitchApi.users(logins)) {
-                if (user.live != null) {
-                    live.add(user.live);
-                }
-            }
-
-            Collections.sort(live, new Comparator<ProviderMediaItem>() {
-                @Override
-                public int compare(ProviderMediaItem a, ProviderMediaItem b) {
-                    return Long.compare(b.publishedMs, a.publishedMs); // newest broadcast first
-                }
-            });
-
-            for (ProviderMediaItem item : live) {
+            for (ProviderMediaItem item : feed(logins)) {
                 group.add(item);
             }
 
             return group;
         });
+    }
+
+    private synchronized List<ProviderMediaItem> feed(List<String> logins) throws IOException {
+        if (mFeed != null && logins.equals(mFeedLogins) && System.currentTimeMillis() - mFeedAt < FEED_CACHE_MS) {
+            return mFeed;
+        }
+
+        List<ProviderMediaItem> items = new ArrayList<>();
+        java.util.HashSet<String> seen = new java.util.HashSet<>();
+
+        try { // live now
+            for (TwitchApi.User user : TwitchApi.users(logins)) {
+                if (user.live != null && seen.add(user.live.videoId)) {
+                    items.add(user.live);
+                }
+            }
+        } catch (IOException e) {
+            // the recorded videos below are still worth showing
+        }
+
+        for (ProviderMediaItem item : TwitchApi.recentVideos(logins, 12, System.currentTimeMillis() - FEED_DAYS_MS)) {
+            if (seen.add(item.videoId)) {
+                items.add(item);
+            }
+        }
+
+        Collections.sort(items, new Comparator<ProviderMediaItem>() {
+            @Override
+            public int compare(ProviderMediaItem a, ProviderMediaItem b) {
+                return Long.compare(b.publishedMs, a.publishedMs); // newest first
+            }
+        });
+
+        mFeed = items;
+        mFeedLogins = new ArrayList<>(logins);
+        mFeedAt = System.currentTimeMillis();
+        return items;
     }
 
     private List<String> followedLogins() {

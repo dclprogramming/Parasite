@@ -15,6 +15,7 @@ import java.net.URLEncoder;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -372,6 +373,89 @@ public final class TwitchApi {
         }
 
         return page;
+    }
+
+    /**
+     * Recent past broadcasts and uploads of several channels, not older than sinceMs (newest first).
+     * Channels are asked about in groups, a few groups at the same time.
+     */
+    public static List<ProviderMediaItem> recentVideos(List<String> logins, int perChannel, long sinceMs) throws IOException {
+        List<List<String>> batches = new ArrayList<>();
+
+        for (int from = 0; from < logins.size(); from += 6) {
+            batches.add(logins.subList(from, Math.min(logins.size(), from + 6)));
+        }
+
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(4);
+        List<ProviderMediaItem> result = new ArrayList<>();
+        IOException lastError = null;
+
+        try {
+            List<java.util.concurrent.Future<List<ProviderMediaItem>>> futures = new ArrayList<>();
+
+            for (List<String> batch : batches) {
+                futures.add(pool.submit(() -> recentVideosOfBatch(batch, perChannel, sinceMs)));
+            }
+
+            for (java.util.concurrent.Future<List<ProviderMediaItem>> future : futures) {
+                try {
+                    result.addAll(future.get());
+                } catch (java.util.concurrent.ExecutionException e) {
+                    lastError = e.getCause() instanceof IOException ? (IOException) e.getCause() : new IOException(e.getCause());
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("Interrupted");
+                }
+            }
+        } finally {
+            pool.shutdown();
+        }
+
+        if (result.isEmpty() && lastError != null) {
+            throw lastError;
+        }
+
+        Collections.sort(result, (a, b) -> Long.compare(b.publishedMs, a.publishedMs));
+        return result;
+    }
+
+    private static List<ProviderMediaItem> recentVideosOfBatch(List<String> logins, int perChannel, long sinceMs) throws IOException {
+        StringBuilder query = new StringBuilder("query {");
+
+        for (int i = 0; i < logins.size(); i++) {
+            String login = q(logins.get(i).toLowerCase(Locale.US));
+
+            for (String type : new String[]{"ARCHIVE", "UPLOAD"}) {
+                query.append(" c").append(i).append('_').append(type.charAt(0)).append(": user(login: ").append(login)
+                        .append(") { videos(first: ").append(perChannel).append(", type: ").append(type)
+                        .append(") { edges { node { ").append(VIDEO_FIELDS).append(" } } } }");
+            }
+        }
+
+        query.append(" }");
+        JSONObject data = query(query.toString());
+        List<ProviderMediaItem> items = new ArrayList<>();
+        java.util.Iterator<String> keys = data.keys();
+
+        while (keys.hasNext()) {
+            JSONObject user = data.optJSONObject(keys.next());
+            JSONArray edges = edgesOf(user != null ? user.optJSONObject("videos") : null);
+
+            for (int i = 0; i < edges.length(); i++) {
+                JSONObject edge = edges.optJSONObject(i);
+                JSONObject node = edge != null ? edge.optJSONObject("node") : null;
+
+                if (node != null) {
+                    ProviderMediaItem item = parseVod(node).item;
+
+                    if (item.publishedMs >= sinceMs) {
+                        items.add(item);
+                    }
+                }
+            }
+        }
+
+        return items;
     }
 
     // Single items
