@@ -29,10 +29,16 @@ public class RumbleContentService extends LocalContentBase {
     private static class Row {
         final String title;
         final String path;
+        final boolean topOfWeek; // most viewed of the last 7 days of the list at path
 
         Row(String title, String path) {
+            this(title, path, false);
+        }
+
+        Row(String title, String path, boolean topOfWeek) {
             this.title = title;
             this.path = path;
+            this.topOfWeek = topOfWeek;
         }
     }
 
@@ -92,7 +98,7 @@ public class RumbleContentService extends LocalContentBase {
         String path = RumbleApi.categoryPath(category);
         List<Row> rows = new ArrayList<>();
         rows.add(new Row("Latest", path));
-        rows.add(new Row("Top this week", path + "?sort=views&date=this-week")); // "today" was the same videos as Latest: a category gets fewer uploads a day than a row shows
+        rows.add(new Row("Top this week", path, true)); // built from the newest videos by view count: category pages cannot be sorted
         return rows;
     }
 
@@ -100,10 +106,20 @@ public class RumbleContentService extends LocalContentBase {
         List<Callable<ProviderMediaGroup>> tasks = new ArrayList<>();
 
         for (Row row : rows) {
-            tasks.add(() -> videoPage(type, row.title, row.path, 1));
+            tasks.add(row.topOfWeek ? () -> topOfWeekRow(type, row.title, row.path) : () -> videoPage(type, row.title, row.path, 1));
         }
 
         return runParallel(tasks);
+    }
+
+    private ProviderMediaGroup topOfWeekRow(int type, String title, String path) throws IOException {
+        ProviderMediaGroup group = new ProviderMediaGroup(type, title);
+
+        for (RumbleParser.Entry entry : RumbleApi.topOfWeek(path)) {
+            group.add(entry.toMediaItem());
+        }
+
+        return group;
     }
 
     /**

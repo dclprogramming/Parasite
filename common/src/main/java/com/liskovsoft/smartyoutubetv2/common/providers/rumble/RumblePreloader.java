@@ -20,6 +20,12 @@ public final class RumblePreloader {
     private RumblePreloader() {
     }
 
+    /** "path" is page 1; "path#N" is page N. */
+    private static boolean preloadEntry(String entry) {
+        int hash = entry.indexOf('#');
+        return hash < 0 ? RumbleApi.preload(entry) : RumbleApi.preload(entry.substring(0, hash), Integer.parseInt(entry.substring(hash + 1)));
+    }
+
     private static boolean signedIn() {
         android.content.Context context = ProviderData.getAppContext();
         return context != null && ProviderAuth.isSignedIn(context, ProviderData.RUMBLE);
@@ -53,7 +59,8 @@ public final class RumblePreloader {
                 paths.add(path);
             }
 
-            paths.add(path + "?sort=views&date=this-week");
+            paths.add(path + "#2"); // "Top this week" is built from the first pages of the category
+            paths.add(path + "#3");
         }
 
         return paths;
@@ -77,7 +84,7 @@ public final class RumblePreloader {
             for (String path : paths()) {
                 BrowserFetcher.waitUntilIdle(60_000); // never in the way of a screen
 
-                if (!RumbleApi.preload(path)) {
+                if (!preloadEntry(path)) {
                     failed.add(path);
                 }
             }
@@ -88,7 +95,7 @@ public final class RumblePreloader {
                 if (path == null) {
                     RumbleApi.preloadSigned(SUBSCRIPTIONS);
                 } else {
-                    RumbleApi.preload(path);
+                    preloadEntry(path);
                 }
             }
 

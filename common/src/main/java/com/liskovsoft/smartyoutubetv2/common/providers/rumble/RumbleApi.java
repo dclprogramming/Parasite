@@ -6,6 +6,8 @@ import com.liskovsoft.smartyoutubetv2.common.providers.model.ProviderMediaItem;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -86,6 +88,16 @@ public final class RumbleApi {
             + "    var dm=/(?:(\\d+):)?(\\d+):(\\d{2})/.exec(text(card.querySelector('[class*=\"duration\"]')));\n"
             + "    return dm?(parseInt(dm[1]||'0',10)*60+parseInt(dm[2],10))*60+parseInt(dm[3],10):0;\n"
             + "  }\n"
+            + "  function num(s){var m=/(\\d[\\d.,]*)\\s*([kKmMbB])?/.exec(s||'');if(!m) return 0;var n=parseFloat(m[1].replace(/,/g,''));if(isNaN(n)) return 0;var u=(m[2]||'').toLowerCase();return Math.round(n*(u==='k'?1e3:u==='m'?1e6:u==='b'?1e9:1));}\n"
+            + "  function viewsOf(el){\n"
+            + "    var names=el.getAttributeNames?el.getAttributeNames():[];\n"
+            + "    for(var i=0;i<names.length;i++){if(/view/i.test(names[i])){var n=num(el.getAttribute(names[i]));if(n) return n;}}\n"
+            + "    var t=((el.textContent||'')+' '+(el.shadowRoot?(el.shadowRoot.textContent||''):'')).replace(/\\s+/g,' ');\n"
+            + "    var m=/(\\d[\\d.,]*\\s*[kKmMbB]?)\\s*(?:views?|watching)/i.exec(t);\n"
+            + "    if(m) return num(m[1]);\n"
+            + "    var ve=deep(el,'[class*=\"view\"],[slot*=\"view\"],[data-views]')[0];\n"
+            + "    return ve?num(ve.getAttribute('data-views')||text(ve)):0;\n"
+            + "  }\n"
             + "  var root=document.querySelector('main')||document.querySelector('#main')||document.body;\n"
             + "  var list=[], seen={}, strategy='';\n"
             + "\n"
@@ -111,7 +123,7 @@ public final class RumbleApi {
             + "      var av=attr(el,['avatar']); av=usable(av)?abs(av):avatarOf(el);\n"
             + "      var hints=(el.getAttribute('hints')||'').toLowerCase();\n"
             + "      list.push({id:id,slug:m[2],title:title,ts:title?ts:'slug',thumb:thumb,channelId:ch?ch.id:'',channelName:attr(el,['name'])||(ch?ch.name:''),avatar:av,\n"
-            + "        duration:durationOf(el,el.getAttribute('duration')),pub:attr(el,['time','datetime']),live:hints.indexOf('live')>=0,tag:el.tagName.toLowerCase(),\n"
+            + "        duration:durationOf(el,el.getAttribute('duration')),views:viewsOf(el),pub:attr(el,['time','datetime']),live:hints.indexOf('live')>=0,tag:el.tagName.toLowerCase(),\n"
             + "        html:list.length<3?(el.outerHTML||'').replace(/\\s+/g,' ').substring(0,700):'',\n"
             + "        shadow:list.length<3?(el.shadowRoot?(el.shadowRoot.innerHTML||'').replace(/\\s+/g,' ').substring(0,500):'no shadow root'):''});\n"
             + "    });\n"
@@ -156,7 +168,7 @@ public final class RumbleApi {
             + "      var ch=channelLink(card);\n"
             + "      var tm=card.querySelector('time[datetime]');\n"
             + "      list.push({id:it.id,slug:it.slug,title:title,ts:title?ts:'slug',thumb:imgUrl(card),channelId:ch?ch.id:'',channelName:ch?(text(card.querySelector('[class*=\"channel__name\"],[class*=\"channel-name\"]'))||ch.name):'',\n"
-            + "        avatar:avatarOf(card),duration:durationOf(card),pub:tm?tm.getAttribute('datetime'):'',live:false,tag:'',\n"
+            + "        avatar:avatarOf(card),duration:durationOf(card),views:viewsOf(card),pub:tm?tm.getAttribute('datetime'):'',live:false,tag:'',\n"
             + "        html:idx<3?(card.outerHTML||'').replace(/\\s+/g,' ').substring(0,700):'',shadow:''});\n"
             + "    });\n"
             + "  }\n"
@@ -243,7 +255,11 @@ public final class RumbleApi {
      * @return false when it could not be loaded now
      */
     public static boolean preload(String path) {
-        String key = path + "#1";
+        return preload(path, 1);
+    }
+
+    public static boolean preload(String path, int page) {
+        String key = path + "#" + page;
         Object[] cached = CACHE.get(key);
 
         if (cached != null && System.currentTimeMillis() - (Long) cached[0] < CACHE_MS) {
@@ -258,11 +274,59 @@ public final class RumbleApi {
         }
 
         try {
-            loadNow(path, 1, true);
+            loadNow(path, page, true);
             return true;
         } catch (IOException | RuntimeException e) {
             return false;
         }
+    }
+
+    private static final int WEEK_PAGES = 3;
+    private static final int WEEK_TOP_COUNT = 30;
+
+    /**
+     * The most viewed videos published during the last 7 days on a list (a category has no "most viewed" page of its own):
+     * the newest pages of the list, only what is under a week old, most viewed first. Empty when the page shows no view counts.
+     */
+    public static List<RumbleParser.Entry> topOfWeek(String path) throws IOException {
+        long since = System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000;
+        List<RumbleParser.Entry> pool = new ArrayList<>();
+        java.util.Set<String> seen = new java.util.HashSet<>();
+
+        for (int page = 1; page <= WEEK_PAGES; page++) {
+            List<RumbleParser.Entry> entries;
+
+            try {
+                entries = listing(path, page);
+            } catch (IOException e) {
+                if (page == 1) {
+                    throw e;
+                }
+
+                break; // what was read is enough
+            }
+
+            if (entries.isEmpty()) {
+                break;
+            }
+
+            boolean reachedOlder = false;
+
+            for (RumbleParser.Entry entry : entries) {
+                if (entry.publishedMs > 0 && entry.publishedMs < since) {
+                    reachedOlder = true;
+                } else if (entry.views > 0 && !entry.live && seen.add(entry.id)) {
+                    pool.add(entry);
+                }
+            }
+
+            if (reachedOlder || entries.size() < MIN_FULL_PAGE) {
+                break; // the list is older than a week from here on
+            }
+        }
+
+        Collections.sort(pool, (a, b) -> Long.compare(b.views, a.views));
+        return pool.size() > WEEK_TOP_COUNT ? new ArrayList<>(pool.subList(0, WEEK_TOP_COUNT)) : pool;
     }
 
     private static final java.util.Set<String> REFRESHING = java.util.Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap<String, Boolean>());
@@ -351,7 +415,7 @@ public final class RumbleApi {
 
     private static java.io.File storeDir(String key) {
         android.content.Context context = com.liskovsoft.smartyoutubetv2.common.prefs.ProviderData.getAppContext();
-        return context != null ? new java.io.File(context.getCacheDir(), key.startsWith("signed:") ? "rumble-signed" : "rumble-lists") : null;
+        return context != null ? new java.io.File(context.getCacheDir(), key.startsWith("signed:") ? "rumble-signed" : "rumble-lists2") : null;
     }
 
     private static java.io.File storeFile(String key) {

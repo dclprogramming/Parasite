@@ -62,6 +62,15 @@ public final class RumbleParser {
         public boolean live;
         public long durationSec;
         public long publishedMs;
+        public long views;          // 0 when the card shows none
+
+        private static String viewsText(long views) {
+            if (views >= 1_000_000) {
+                return String.format(java.util.Locale.US, "%.1fM views", views / 1_000_000f);
+            }
+
+            return views >= 1_000 ? String.format(java.util.Locale.US, "%.1fK views", views / 1_000f) : views + " views";
+        }
 
         public ProviderMediaItem toMediaItem() {
             ProviderMediaItem item = ProviderMediaItem.video(stem != null ? stem : id);
@@ -73,7 +82,7 @@ public final class RumbleParser {
             item.durationMs = durationSec * 1000;
             item.publishedMs = publishedMs;
             item.live = live;
-            item.secondTitle = ProviderMediaItem.buildSecondTitle(channelName, publishedMs);
+            item.secondTitle = ProviderMediaItem.buildSecondTitle(channelName, publishedMs) + (views > 0 && !live ? " \u2022 " + viewsText(views) : "");
             return item;
         }
     }
@@ -279,6 +288,7 @@ public final class RumbleParser {
                 entry.channelThumb = blankToNull(card.optString("avatar", ""));
                 entry.durationSec = card.optLong("duration");
                 entry.publishedMs = parseIsoDate(blankToNull(card.optString("pub", "")));
+                entry.views = card.optLong("views");
                 entry.live = card.optBoolean("live", false);
                 entry.tag = blankToNull(card.optString("tag", ""));
                 entry.html = blankToNull(card.optString("html", ""));
