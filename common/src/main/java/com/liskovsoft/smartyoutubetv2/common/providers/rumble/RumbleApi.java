@@ -89,10 +89,11 @@ public final class RumbleApi {
             + "    return dm?(parseInt(dm[1]||'0',10)*60+parseInt(dm[2],10))*60+parseInt(dm[3],10):0;\n"
             + "  }\n"
             + "  function num(s){var m=/(\\d[\\d.,]*)\\s*([kKmMbB])?/.exec(s||'');if(!m) return 0;var n=parseFloat(m[1].replace(/,/g,''));if(isNaN(n)) return 0;var u=(m[2]||'').toLowerCase();return Math.round(n*(u==='k'?1e3:u==='m'?1e6:u==='b'?1e9:1));}\n"
+            + "  function allText(root){var t='';(function walk(n){if(n.nodeType===3){t+=n.nodeValue+' ';return;}if(n.nodeType!==1&&n.nodeType!==11) return;if(n.shadowRoot) walk(n.shadowRoot);var k=n.childNodes;for(var i=0;i<k.length;i++) walk(k[i]);})(root);return t;}\n"
             + "  function viewsOf(el){\n"
             + "    var names=el.getAttributeNames?el.getAttributeNames():[];\n"
             + "    for(var i=0;i<names.length;i++){if(/view/i.test(names[i])){var n=num(el.getAttribute(names[i]));if(n) return n;}}\n"
-            + "    var t=((el.textContent||'')+' '+(el.shadowRoot?(el.shadowRoot.textContent||''):'')).replace(/\\s+/g,' ');\n"
+            + "    var t=allText(el).replace(/\\s+/g,' ');\n"
             + "    var m=/(\\d[\\d.,]*\\s*[kKmMbB]?)\\s*(?:views?|watching)/i.exec(t);\n"
             + "    if(m) return num(m[1]);\n"
             + "    var ve=deep(el,'[class*=\"view\"],[slot*=\"view\"],[data-views]')[0];\n"
@@ -424,7 +425,7 @@ public final class RumbleApi {
 
     private static java.io.File storeDir(String key) {
         android.content.Context context = com.liskovsoft.smartyoutubetv2.common.prefs.ProviderData.getAppContext();
-        return context != null ? new java.io.File(context.getCacheDir(), key.startsWith("signed:") ? "rumble-signed" : "rumble-lists2") : null;
+        return context != null ? new java.io.File(context.getCacheDir(), key.startsWith("signed:") ? "rumble-signed" : "rumble-lists3") : null;
     }
 
     private static java.io.File storeFile(String key) {
