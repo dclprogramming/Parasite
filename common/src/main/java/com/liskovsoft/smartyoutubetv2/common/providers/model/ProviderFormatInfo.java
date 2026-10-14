@@ -26,6 +26,7 @@ public class ProviderFormatInfo implements MediaItemFormatInfo {
     private String mUnplayableReason;
     private String mClickTrackingParams;
     private boolean mLive;
+    private boolean mKeepVideo;
 
     public static ProviderFormatInfo playable(String videoId, String url) {
         ProviderFormatInfo info = new ProviderFormatInfo();
@@ -39,6 +40,19 @@ public class ProviderFormatInfo implements MediaItemFormatInfo {
         info.mVideoId = videoId;
         info.mUnplayableReason = reason;
         return info;
+    }
+
+    /**
+     * The reason is a notice for the viewer (e.g. a paid subscription is needed): it is shown as a message, the title of
+     * the video stays as it is and the player does not skip to the next video.
+     */
+    public ProviderFormatInfo keepVideo() {
+        mKeepVideo = true;
+        return this;
+    }
+
+    public boolean isKeepVideo() {
+        return mKeepVideo;
     }
 
     private boolean isHls() {

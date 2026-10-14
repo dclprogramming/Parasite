@@ -777,7 +777,10 @@ public final class Video {
             return;
         }
 
-        metadataTitle = formatInfo.getPlayabilityReason(); // null if has media formats
+        // null if has media formats. A notice (e.g. paid subscription needed) must not replace the title of the video.
+        metadataTitle = formatInfo instanceof com.liskovsoft.smartyoutubetv2.common.providers.model.ProviderFormatInfo
+                && ((com.liskovsoft.smartyoutubetv2.common.providers.model.ProviderFormatInfo) formatInfo).isKeepVideo()
+                ? null : formatInfo.getPlayabilityReason();
 
         isLive = formatInfo.isLive();
         if (isLive) {

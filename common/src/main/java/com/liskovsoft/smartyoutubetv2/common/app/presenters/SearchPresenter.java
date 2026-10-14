@@ -5,6 +5,7 @@ import android.content.Context;
 import com.liskovsoft.mediaserviceinterfaces.ContentService;
 import com.liskovsoft.mediaserviceinterfaces.data.MediaGroup;
 import com.liskovsoft.mediaserviceinterfaces.data.SearchOptions;
+import com.liskovsoft.sharedutils.helpers.MessageHelpers;
 import com.liskovsoft.sharedutils.mylogger.Log;
 import com.liskovsoft.sharedutils.rx.RxHelper;
 import com.liskovsoft.smartyoutubetv2.common.R;
@@ -22,6 +23,7 @@ import com.liskovsoft.smartyoutubetv2.common.app.views.SearchView;
 import com.liskovsoft.smartyoutubetv2.common.misc.BrowseProcessorManager;
 import com.liskovsoft.smartyoutubetv2.common.misc.MediaServiceManager;
 import com.liskovsoft.smartyoutubetv2.common.prefs.AccountsData;
+import com.liskovsoft.smartyoutubetv2.common.prefs.ProviderData;
 import com.liskovsoft.smartyoutubetv2.common.utils.AppDialogUtil;
 import io.reactivex.disposables.Disposable;
 
@@ -178,12 +180,15 @@ public class SearchPresenter extends BasePresenter<SearchView> implements VideoG
 
         getView().clearSearch();
 
+        final boolean[] gotResults = {false};
+
         mLoadAction = contentService.getSearchObserve(searchText,
                 mUploadDateOptions | mDurationOptions | mTypeOptions | mFeatureOptions | mSortingOptions)
                 .subscribe(
                         mediaGroups -> {
                             Log.d(TAG, "Receiving results for '%s'", searchText);
                             for (MediaGroup mediaGroup : mediaGroups) {
+                                gotResults[0] = true;
                                 VideoGroup group = VideoGroup.from(mediaGroup);
                                 startPlayFirstVideo(group);
                                 getView().updateSearch(group);
@@ -194,11 +199,19 @@ public class SearchPresenter extends BasePresenter<SearchView> implements VideoG
                             Log.e(TAG, "loadSearchData error: %s", error.getMessage());
                             if (getView() != null) {
                                 getView().showProgressBar(false);
+
+                                if (ProviderData.getSelected() != ProviderData.YOUTUBE) { // never fail silently
+                                    MessageHelpers.showLongMessage(getContext(), "Search for '" + searchText + "' failed: " + error.getMessage());
+                                }
                             }
                         },
                         () -> {
                             if (getView() != null) {
                                 getView().showProgressBar(false);
+
+                                if (!gotResults[0] && ProviderData.getSelected() != ProviderData.YOUTUBE) {
+                                    MessageHelpers.showLongMessage(getContext(), "No results for '" + searchText + "'");
+                                }
                             }
                         }
                 );

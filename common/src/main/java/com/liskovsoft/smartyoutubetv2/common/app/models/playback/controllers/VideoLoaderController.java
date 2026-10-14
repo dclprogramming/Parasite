@@ -289,14 +289,25 @@ public class VideoLoaderController extends BasePlayerController {
                 return;
             }
 
-            player.setTitle(formatInfo.getPlayabilityReason());
-            player.showProgressBar(false);
-            mSuggestionsController.loadSuggestions(getVideo());
-            bgImageUrl = getVideo().getBackgroundUrl();
+            boolean keepVideo = formatInfo instanceof com.liskovsoft.smartyoutubetv2.common.providers.model.ProviderFormatInfo
+                    && ((com.liskovsoft.smartyoutubetv2.common.providers.model.ProviderFormatInfo) formatInfo).isKeepVideo();
 
-            // 18+ video or the video is hidden/removed
-            player.showOverlay(true);
-            loadNextVideo(5_000);
+            if (keepVideo) {
+                // A notice (e.g. paid subscription needed): message at the bottom, the title stays, no skipping to the next video
+                MessageHelpers.showLongMessage(getContext(), formatInfo.getPlayabilityReason());
+                player.showProgressBar(false);
+                bgImageUrl = getVideo().getBackgroundUrl();
+                player.showOverlay(true);
+            } else {
+                player.setTitle(formatInfo.getPlayabilityReason());
+                player.showProgressBar(false);
+                mSuggestionsController.loadSuggestions(getVideo());
+                bgImageUrl = getVideo().getBackgroundUrl();
+
+                // 18+ video or the video is hidden/removed
+                player.showOverlay(true);
+                loadNextVideo(5_000);
+            }
 
             //if (formatInfo.isUnknownError()) { // the bot error or the video not available
             //    scheduleRebootAppTimer(5_000);

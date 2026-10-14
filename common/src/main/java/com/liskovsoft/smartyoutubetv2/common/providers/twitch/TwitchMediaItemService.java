@@ -70,14 +70,20 @@ public class TwitchMediaItemService extends StubMediaItemService {
             String reason = e.code == 401 || e.code == 403
                     ? subscriptionReason(videoId, null)
                     : "Twitch: " + e.getMessage();
-            return ProviderFormatInfo.unplayable(videoId, reason);
+            return notice(videoId, reason);
         } catch (IOException e) {
             if (isForbidden(e)) {
-                return ProviderFormatInfo.unplayable(videoId, subscriptionReason(videoId, null));
+                return notice(videoId, subscriptionReason(videoId, null));
             }
 
             return ProviderFormatInfo.unplayable(videoId, e.getMessage() != null && e.getMessage().startsWith("Twitch") ? e.getMessage() : "Twitch: " + e.getMessage());
         }
+    }
+
+    /** An unplayable answer that only informs: the message is shown on the video, which stays selected. */
+    private static ProviderFormatInfo notice(String videoId, String reason) {
+        ProviderFormatInfo info = ProviderFormatInfo.unplayable(videoId, reason);
+        return reason != null && reason.endsWith("requires a paid subscription") ? info.keepVideo() : info;
     }
 
     /** Twitch answers 403 (sometimes 401) for streams and videos that only paying subscribers may watch. */
@@ -136,7 +142,7 @@ public class TwitchMediaItemService extends StubMediaItemService {
             String url = TwitchApi.liveUrl(login);
 
             if (isRestricted(url)) {
-                return ProviderFormatInfo.unplayable(videoId, subscriptionReason(videoId, user.displayName));
+                return notice(videoId, subscriptionReason(videoId, user.displayName));
             }
 
             mStore.addToHistory(user.live);
@@ -157,7 +163,7 @@ public class TwitchMediaItemService extends StubMediaItemService {
             String url = TwitchApi.vodUrl(id);
 
             if (isRestricted(url)) {
-                return ProviderFormatInfo.unplayable(videoId, subscriptionReason(videoId, vod.channelName));
+                return notice(videoId, subscriptionReason(videoId, vod.channelName));
             }
 
             mStore.addToHistory(vod.item);

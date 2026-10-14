@@ -199,6 +199,8 @@ public class SearchTagsFragment extends SearchTagsFragmentBase {
 
     @Override
     public boolean onQueryTextSubmit(String query) {
+        // An explicit submit always searches again (also for the text of the search shown on the page)
+        mSearchQuery = null;
         loadSearchResult(query);
         return true;
     }
