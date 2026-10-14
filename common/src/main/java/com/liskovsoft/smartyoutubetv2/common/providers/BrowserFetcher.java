@@ -25,7 +25,7 @@ import java.util.concurrent.TimeUnit;
 public final class BrowserFetcher {
     private static final String TAG = "ParasiteBrowser";
     private static final long TIMEOUT_SEC = 45;
-    private static final int CHECK_ATTEMPTS = 25; // one per second
+    private static final int CHECK_ATTEMPTS = 36; // first check after 0.25 s, then every 0.7 s
     private static final Object LOCK = new Object(); // one request at a time
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
     // Everything below is touched on the main thread only (except the request fields)
@@ -39,6 +39,7 @@ public final class BrowserFetcher {
     private static class Request {
         final int id = NEXT_ID.incrementAndGet(); // late answers of an abandoned request must not finish a newer one
         final CountDownLatch done = new CountDownLatch(1);
+        volatile boolean background; // low priority: a screen the viewer waits for may cancel it
         volatile int status;
         volatile String body;
         volatile String error;
@@ -96,6 +97,8 @@ public final class BrowserFetcher {
             throw new IOException("Browser fetch is not ready yet");
         }
 
+        abortBackground(); // a viewer is waiting: background work steps aside
+
         synchronized (LOCK) {
             Request request = new Request();
             MAIN.post(() -> begin(context, origin, url, request));
@@ -108,7 +111,7 @@ public final class BrowserFetcher {
                 Thread.currentThread().interrupt();
                 throw new IOException(e);
             } finally {
-                MAIN.post(BrowserFetcher::park);
+                MAIN.post(BrowserFetcher::rest); // keep the small site page: the next fetch() needs no new page load
             }
 
             if (request.error != null) {
@@ -135,16 +138,51 @@ public final class BrowserFetcher {
      * @param autoplay let the page start video by itself (needed to read what a player loads; otherwise keep it off)
      */
     public static String scrape(String pageUrl, String script, int maxWaitSec, boolean autoplay) throws IOException {
-        PENDING.incrementAndGet();
+        return scrape(pageUrl, script, maxWaitSec, autoplay, false);
+    }
+
+    /**
+     * @param background low priority (preloading): it is cancelled with an IOException as soon as a screen needs the browser
+     */
+    public static String scrape(String pageUrl, String script, int maxWaitSec, boolean autoplay, boolean background) throws IOException {
+        if (!background) {
+            abortBackground();
+        }
+
+        if (!background) { // preloading does not count as "busy": it must not hold back other work
+            PENDING.incrementAndGet();
+        }
 
         try {
-            return scrapeNow(pageUrl, script, maxWaitSec, autoplay);
+            return scrapeNow(pageUrl, script, maxWaitSec, autoplay, background);
         } finally {
-            PENDING.decrementAndGet();
+            if (!background) {
+                PENDING.decrementAndGet();
+            }
         }
     }
 
-    private static String scrapeNow(String pageUrl, String script, int maxWaitSec, boolean autoplay) throws IOException {
+    /** Starts the hidden browser and passes the site's browser check ahead of time, so the first screen opens sooner. */
+    public static void warmUp(String origin) {
+        try {
+            fetch(origin, origin + "/robots.txt");
+        } catch (IOException e) {
+            Log.d(TAG, "Warm-up did not finish: " + e.getMessage());
+        }
+    }
+
+    /** Cancels a running background scrape (the lock is then free for the request that is waiting). */
+    private static void abortBackground() {
+        MAIN.post(() -> {
+            Request current = sCurrent;
+
+            if (current != null && current.background && current.done.getCount() > 0) {
+                current.finish(0, null, "Superseded by a screen the viewer is waiting for");
+            }
+        });
+    }
+
+    private static String scrapeNow(String pageUrl, String script, int maxWaitSec, boolean autoplay, boolean background) throws IOException {
         Context context = ProviderData.getAppContext();
 
         if (context == null) {
@@ -153,6 +191,7 @@ public final class BrowserFetcher {
 
         synchronized (LOCK) {
             Request request = new Request();
+            request.background = background;
             MAIN.post(() -> beginScrape(context, pageUrl, script, maxWaitSec, autoplay, request));
 
             try {
@@ -175,6 +214,13 @@ public final class BrowserFetcher {
     }
 
     // Main thread
+
+    /** After a plain fetch: nothing heavy is loaded, so only pause the browser and stay on the site page. */
+    private static void rest() {
+        if (sWebView != null) {
+            sWebView.onPause();
+        }
+    }
 
     /** Leaves the page: no video, timers or scripts keep running (and holding a decoder) between requests. */
     private static void park() {
@@ -204,6 +250,10 @@ public final class BrowserFetcher {
 
     private static void pollScrape(WebView view, String script, Request request, int attempt, int maxAttempts) {
         MAIN.postDelayed(() -> {
+            if (sCurrent != request || request.done.getCount() == 0) {
+                return; // cancelled, timed out or replaced: stop polling a page that now belongs to someone else
+            }
+
             try {
                 view.evaluateJavascript(script, value -> {
                     String result = decodeJsString(value);
@@ -291,6 +341,10 @@ public final class BrowserFetcher {
      */
     private static void waitForBrowserCheck(WebView view, String origin, String url, Request request, int attempt) {
         MAIN.postDelayed(() -> {
+            if (sCurrent != request || request.done.getCount() == 0) {
+                return;
+            }
+
             try {
                 if (!sPageLoaded) {
                     retryOrFail(view, origin, url, request, attempt);
@@ -311,7 +365,7 @@ public final class BrowserFetcher {
             } catch (Throwable e) {
                 request.finish(0, null, "Browser check failed: " + e);
             }
-        }, 1000);
+        }, attempt == 0 ? 250 : 700);
     }
 
     private static void retryOrFail(WebView view, String origin, String url, Request request, int attempt) {

@@ -54,6 +54,7 @@ public final class ProviderServices {
 
         if (provider == ProviderData.RUMBLE && context != null) {
             ProviderStore store = new ProviderStore(context, "rumble");
+            com.liskovsoft.smartyoutubetv2.common.providers.rumble.RumblePreloader.start(); // warm browser + first pages in the background
             return new ProviderServiceManager(new RumbleContentService(store), new RumbleMediaItemService(store));
         }
 

@@ -220,27 +220,93 @@ public final class RumbleApi {
             return (List<RumbleParser.Entry>) cached[1];
         }
 
+        // Seen before (even in an earlier run of the app): show it at once, and renew it quietly if it is getting old
+        Object[] stored = readStored(key);
+
+        if (stored != null) {
+            long savedAt = (Long) stored[0];
+            List<RumbleParser.Entry> entries = (List<RumbleParser.Entry>) stored[1];
+            CACHE.put(key, new Object[]{savedAt, entries});
+
+            if (System.currentTimeMillis() - savedAt >= CACHE_MS) {
+                refreshInBackground(path, page);
+            }
+
+            return entries;
+        }
+
+        return loadNow(path, page, false);
+    }
+
+    /**
+     * Makes sure page 1 of the list is saved and recent, without disturbing screens (low priority).
+     * @return false when it could not be loaded now
+     */
+    public static boolean preload(String path) {
+        String key = path + "#1";
+        Object[] cached = CACHE.get(key);
+
+        if (cached != null && System.currentTimeMillis() - (Long) cached[0] < CACHE_MS) {
+            return true;
+        }
+
+        Object[] stored = readStored(key);
+
+        if (stored != null && System.currentTimeMillis() - (Long) stored[0] < CACHE_MS) {
+            CACHE.put(key, stored);
+            return true;
+        }
+
+        try {
+            loadNow(path, 1, true);
+            return true;
+        } catch (IOException | RuntimeException e) {
+            return false;
+        }
+    }
+
+    private static final java.util.Set<String> REFRESHING = java.util.Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap<String, Boolean>());
+
+    private static void refreshInBackground(String path, int page) {
+        String key = path + "#" + page;
+
+        if (!REFRESHING.add(key)) {
+            return;
+        }
+
+        Thread thread = new Thread(() -> {
+            try {
+                BrowserFetcher.waitUntilIdle(20_000); // screens being opened come first
+                loadNow(path, page, true);
+            } catch (IOException | RuntimeException e) {
+                // the saved copy stays in use
+            } finally {
+                REFRESHING.remove(key);
+            }
+        }, "RumbleRefresh");
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    private static List<RumbleParser.Entry> loadNow(String path, int page, boolean background) throws IOException {
+        String key = path + "#" + page;
         List<RumbleParser.Entry> entries;
 
         try { // the page as a browser shows it: Rumble fills its lists with scripts
-            entries = renderedListing(path, page);
+            entries = renderedListing(path, page, background);
 
             if (entries.isEmpty() && page == 1) {
                 RumbleDebug.emptyRendered(path);
             }
         } catch (IOException renderError) { // no browser available: read the plain page instead
+            if (background) {
+                throw renderError; // preloading never competes with screens (the plain page may need the browser too)
+            }
+
             entries = plainListing(path, page);
         }
 
-        for (RumbleParser.Entry entry : entries) { // remember channel pictures and card titles
-            if (entry.channelId != null && entry.channelThumb != null) {
-                CHANNEL_THUMBS.put(entry.channelId, entry.channelThumb);
-            }
-
-            if (entry.stem != null && entry.title != null && !"slug".equals(entry.titleSource)) {
-                TITLES.put(entry.stem, entry.title);
-            }
-        }
+        remember(entries); // channel pictures and card titles
 
         if (!entries.isEmpty()) {
             CACHE.put(key, new Object[]{System.currentTimeMillis(), entries});
@@ -266,8 +332,134 @@ public final class RumbleApi {
         return page > 1 ? path + (path.contains("?") ? "&" : "?") + "page=" + page : path;
     }
 
+    /** The signed-in lists are the account's own: never saved to disk. */
     private static List<RumbleParser.Entry> renderedListing(String path, int page) throws IOException {
         return RumbleParser.parseRendered(BrowserFetcher.scrape(SITE + pagedPath(path, page), EXTRACT_SCRIPT, 22, false));
+    }
+
+    private static List<RumbleParser.Entry> renderedListing(String path, int page, boolean background) throws IOException {
+        String rendered = BrowserFetcher.scrape(SITE + pagedPath(path, page), EXTRACT_SCRIPT, 22, false, background);
+        List<RumbleParser.Entry> entries = RumbleParser.parseRendered(rendered);
+
+        if (!entries.isEmpty()) {
+            store(path + "#" + page, rendered);
+        }
+
+        return entries;
+    }
+
+    // Saved copies of rendered lists: survive restarts, so screens open at once
+
+    private static final long STORED_MAX_MS = 12L * 60 * 60 * 1000;
+
+    private static java.io.File storeDir() {
+        android.content.Context context = com.liskovsoft.smartyoutubetv2.common.prefs.ProviderData.getAppContext();
+        return context != null ? new java.io.File(context.getCacheDir(), "rumble-lists") : null;
+    }
+
+    private static java.io.File storeFile(String key) {
+        java.io.File dir = storeDir();
+        return dir != null ? new java.io.File(dir, Integer.toHexString(key.hashCode()) + "_" + key.length() + ".txt") : null;
+    }
+
+    private static void store(String key, String rendered) {
+        try {
+            java.io.File file = storeFile(key);
+
+            if (file == null) {
+                return;
+            }
+
+            file.getParentFile().mkdirs();
+            java.io.File temp = new java.io.File(file.getPath() + ".tmp");
+
+            try (java.io.Writer out = new java.io.OutputStreamWriter(new java.io.FileOutputStream(temp), "UTF-8")) {
+                out.write(key);
+                out.write("\n");
+                out.write(String.valueOf(System.currentTimeMillis()));
+                out.write("\n");
+                out.write(rendered);
+            }
+
+            if (!temp.renameTo(file)) {
+                file.delete();
+                temp.renameTo(file);
+            }
+
+            java.io.File[] files = file.getParentFile().listFiles();
+
+            if (files != null && files.length > 150) { // keep the folder small: drop the oldest
+                java.util.Arrays.sort(files, (a, b) -> Long.compare(a.lastModified(), b.lastModified()));
+
+                for (int i = 0; i < files.length - 100; i++) {
+                    files[i].delete();
+                }
+            }
+        } catch (java.io.IOException | RuntimeException e) {
+            // saving is only a speed-up
+        }
+    }
+
+    /** @return {savedAtMs, entries} or null when nothing usable is saved */
+    private static Object[] readStored(String key) {
+        try {
+            java.io.File file = storeFile(key);
+
+            if (file == null || !file.isFile()) {
+                return null;
+            }
+
+            String all;
+
+            try (java.io.InputStream in = new java.io.FileInputStream(file)) {
+                java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream();
+                byte[] buffer = new byte[16384];
+                int n;
+
+                while ((n = in.read(buffer)) > 0) {
+                    bytes.write(buffer, 0, n);
+                }
+
+                all = bytes.toString("UTF-8");
+            }
+
+            int first = all.indexOf('\n');
+            int second = first >= 0 ? all.indexOf('\n', first + 1) : -1;
+
+            if (second < 0 || !key.equals(all.substring(0, first))) {
+                return null;
+            }
+
+            long savedAt = Long.parseLong(all.substring(first + 1, second));
+
+            if (System.currentTimeMillis() - savedAt > STORED_MAX_MS) {
+                return null;
+            }
+
+            List<RumbleParser.Entry> entries = RumbleParser.parseRendered(all.substring(second + 1));
+
+            if (entries.isEmpty()) {
+                return null;
+            }
+
+            remember(entries);
+            return new Object[]{savedAt, entries};
+        } catch (java.io.IOException | RuntimeException e) {
+            return null;
+        }
+    }
+
+    /** Remember channel pictures and card titles seen in a list. */
+    private static void remember(List<RumbleParser.Entry> entries) {
+        for (RumbleParser.Entry entry : entries) {
+            if (entry.channelId != null && entry.channelThumb != null) {
+                CHANNEL_THUMBS.put(entry.channelId, entry.channelThumb);
+            }
+
+            if (entry.stem != null && entry.title != null && !"slug".equals(entry.titleSource)) {
+                TITLES.put(entry.stem, entry.title);
+            }
+        }
     }
 
     private static List<RumbleParser.Entry> plainListing(String path, int page) throws IOException {
