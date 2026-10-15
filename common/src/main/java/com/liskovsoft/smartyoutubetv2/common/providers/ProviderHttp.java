@@ -41,14 +41,6 @@ public final class ProviderHttp {
     }
 
     /**
-     * Checks that the url is playable: asks for the first byte only.
-     */
-    public static boolean isReachable(String url) {
-        int code = probe(url);
-        return code == 200 || code == 206;
-    }
-
-    /**
      * HTTP status of a one-byte request, or 0 when the server could not be reached.
      */
     public static int probe(String url) {

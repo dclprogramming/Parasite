@@ -6,8 +6,6 @@ import com.liskovsoft.smartyoutubetv2.common.providers.model.ProviderMediaItem;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -134,9 +132,7 @@ public final class RumbleApi {
             + "      var av=attr(el,['avatar']); av=usable(av)?abs(av):avatarOf(el);\n"
             + "      var hints=(el.getAttribute('hints')||'').toLowerCase();\n"
             + "      list.push({id:id,slug:m[2],title:title,ts:title?ts:'slug',thumb:thumb,channelId:ch?ch.id:'',channelName:attr(el,['name'])||(ch?ch.name:''),avatar:av,\n"
-            + "        duration:durationOf(el,el.getAttribute('duration')),views:viewsOf(el),pub:attr(el,['time','datetime']),live:hints.indexOf('live')>=0,tag:el.tagName.toLowerCase(),\n"
-            + "        html:list.length<3?(el.outerHTML||'').replace(/\\s+/g,' ').substring(0,700):'',\n"
-            + "        shadow:list.length<3?(el.shadowRoot?(el.shadowRoot.innerHTML||'').replace(/\\s+/g,' ').substring(0,500):'no shadow root'):''});\n"
+            + "        duration:durationOf(el,el.getAttribute('duration')),views:viewsOf(el),pub:attr(el,['time','datetime']),live:hints.indexOf('live')>=0});\n"
             + "    });\n"
             + "  }\n"
             + "\n"
@@ -180,8 +176,7 @@ public final class RumbleApi {
             + "      var ch=channelLink(card);\n"
             + "      var tm=card.querySelector('time[datetime]');\n"
             + "      list.push({id:it.id,slug:it.slug,title:title,ts:title?ts:'slug',thumb:imgUrl(card),channelId:ch?ch.id:'',channelName:ch?(text(card.querySelector('[class*=\"channel__name\"],[class*=\"channel-name\"]'))||ch.name):'',\n"
-            + "        avatar:avatarOf(card),duration:durationOf(card),views:viewsOf(card),pub:tm?tm.getAttribute('datetime'):'',live:false,tag:'',\n"
-            + "        html:idx<3?(card.outerHTML||'').replace(/\\s+/g,' ').substring(0,700):'',shadow:''});\n"
+            + "        avatar:avatarOf(card),duration:durationOf(card),views:viewsOf(card),pub:tm?tm.getAttribute('datetime'):'',live:false});\n"
             + "    });\n"
             + "  }\n"
             + "\n"
@@ -343,9 +338,6 @@ public final class RumbleApi {
 
         if (!entries.isEmpty()) {
             CACHE.put(key, new Object[]{System.currentTimeMillis(), entries});
-
-            final List<RumbleParser.Entry> checked = entries;
-            new Thread(() -> RumbleDebug.auditListing(path, checked)).start(); // quiet unless something looks wrong
         }
 
         return entries;
@@ -925,8 +917,6 @@ public final class RumbleApi {
 
         return null;
     }
-
-    private static final java.util.Map<String, String> EMBED_IDS = new java.util.concurrent.ConcurrentHashMap<>();
 
     private static final java.util.Map<String, List<String>> EMBED_ID_LISTS = new java.util.concurrent.ConcurrentHashMap<>();
 

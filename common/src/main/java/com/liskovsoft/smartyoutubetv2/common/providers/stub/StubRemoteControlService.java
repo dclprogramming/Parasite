@@ -5,7 +5,6 @@ import com.liskovsoft.mediaserviceinterfaces.RemoteControlService;
 import com.liskovsoft.mediaserviceinterfaces.data.Command;
 import io.reactivex.Observable;
 
-import java.util.Collections;
 
 public class StubRemoteControlService implements RemoteControlService {
     @Override

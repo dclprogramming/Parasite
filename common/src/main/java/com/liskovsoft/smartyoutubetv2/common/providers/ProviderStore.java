@@ -7,7 +7,6 @@ import com.liskovsoft.smartyoutubetv2.common.providers.model.ProviderMediaItem;
 
 import org.json.JSONArray;
 import org.json.JSONException;
-import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -19,6 +18,9 @@ import java.util.List;
 public class ProviderStore {
     private static final int MAX_HISTORY = 200;
     private final SharedPreferences mPrefs;
+    // The saved lists are read from storage once and kept here: a follow or a history entry used to parse the whole
+    // saved list again each time (the channel sync does that hundreds of times in a row)
+    private final java.util.Map<String, List<ProviderMediaItem>> mCache = new java.util.HashMap<>();
 
     public ProviderStore(Context context, String name) {
         mPrefs = context.getApplicationContext().getSharedPreferences("parasite_store_" + name, Context.MODE_PRIVATE);
@@ -27,7 +29,7 @@ public class ProviderStore {
     // Followed channels
 
     public synchronized List<ProviderMediaItem> getChannels() {
-        return readItems("channels");
+        return new ArrayList<>(items("channels"));
     }
 
     public synchronized boolean isFollowed(String channelId) {
@@ -35,7 +37,7 @@ public class ProviderStore {
             return false;
         }
 
-        for (ProviderMediaItem item : getChannels()) {
+        for (ProviderMediaItem item : items("channels")) {
             if (channelId.equals(item.channelId)) {
                 return true;
             }
@@ -87,7 +89,7 @@ public class ProviderStore {
     // Watch history (newest first)
 
     public synchronized List<ProviderMediaItem> getHistory() {
-        return readItems("history");
+        return new ArrayList<>(items("history"));
     }
 
     public synchronized void addToHistory(ProviderMediaItem video) {
@@ -109,7 +111,19 @@ public class ProviderStore {
     }
 
     public synchronized void clearHistory() {
+        mCache.remove("history");
         mPrefs.edit().remove("history").apply();
+    }
+
+    private List<ProviderMediaItem> items(String key) {
+        List<ProviderMediaItem> cached = mCache.get(key);
+
+        if (cached == null) {
+            cached = readItems(key);
+            mCache.put(key, cached);
+        }
+
+        return cached;
     }
 
     private List<ProviderMediaItem> readItems(String key) {
@@ -136,12 +150,14 @@ public class ProviderStore {
 
     private void writeItems(String key, List<ProviderMediaItem> items, int max) {
         JSONArray array = new JSONArray();
+        List<ProviderMediaItem> kept = new ArrayList<>(Math.min(items.size(), max));
 
         for (int i = 0; i < items.size() && i < max; i++) {
-            JSONObject json = items.get(i).toJson();
-            array.put(json);
+            array.put(items.get(i).toJson());
+            kept.add(items.get(i));
         }
 
+        mCache.put(key, kept);
         mPrefs.edit().putString(key, array.toString()).apply();
     }
 }

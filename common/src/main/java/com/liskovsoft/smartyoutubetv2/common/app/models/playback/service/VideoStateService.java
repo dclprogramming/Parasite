@@ -26,6 +26,7 @@ public class VideoStateService implements ProfileChangeListener {
     private final List<State> mStates;
     private final AppPrefs mPrefs;
     private static final String DELIM = "&si;";
+    private static final java.util.regex.Pattern RUMBLE_ID = java.util.regex.Pattern.compile("v[0-9a-z]{3,12}(-.*)?");
     private boolean mIsHistoryBroken;
     private final Runnable mPersistStateInt = () -> {
         try {
@@ -146,7 +147,7 @@ public class VideoStateService implements ProfileChangeListener {
             return ProviderData.TWITCH;
         }
 
-        if (videoId.length() != 11 && videoId.matches("v[0-9a-z]{3,12}(-.*)?")) {
+        if (videoId.length() != 11 && RUMBLE_ID.matcher(videoId).matches()) {
             return ProviderData.RUMBLE;
         }
 

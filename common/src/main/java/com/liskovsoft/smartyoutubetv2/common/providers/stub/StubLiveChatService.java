@@ -5,7 +5,6 @@ import com.liskovsoft.mediaserviceinterfaces.LiveChatService;
 import com.liskovsoft.mediaserviceinterfaces.data.ChatItem;
 import io.reactivex.Observable;
 
-import java.util.Collections;
 
 public class StubLiveChatService implements LiveChatService {
     @Override

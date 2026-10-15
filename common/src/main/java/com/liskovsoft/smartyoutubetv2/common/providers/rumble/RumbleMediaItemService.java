@@ -18,7 +18,6 @@ import com.liskovsoft.smartyoutubetv2.common.providers.stub.StubMediaItemService
 import io.reactivex.Observable;
 
 import java.io.IOException;
-import java.util.List;
 
 /**
  * Rumble playback info, video details and (local) channel follow/unfollow.

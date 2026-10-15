@@ -7,7 +7,6 @@ import com.liskovsoft.mediaserviceinterfaces.data.MediaItem;
 import com.liskovsoft.mediaserviceinterfaces.data.NotificationState;
 import io.reactivex.Observable;
 
-import java.util.Collections;
 
 public class StubNotificationsService implements NotificationsService {
     @Override

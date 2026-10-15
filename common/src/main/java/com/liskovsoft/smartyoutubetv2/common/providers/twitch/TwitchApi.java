@@ -83,10 +83,6 @@ public final class TwitchApi {
         sPageSize = Math.max(5, Math.min(size, 100));
     }
 
-    public static int pageSize() {
-        return sPageSize;
-    }
-
     private static volatile Runnable sAuthRejectedListener;
 
     /** Called (on any thread) when Twitch refuses the stored login token; the token is dropped before it runs. */
@@ -130,7 +126,7 @@ public final class TwitchApi {
             Map<String, String> page = new HashMap<>();
             page.put("User-Agent", USER_AGENT);
             String html = ProviderHttp.get("https://www.twitch.tv", page);
-            java.util.regex.Matcher m = java.util.regex.Pattern.compile("\"Client-ID\":\"([A-Za-z0-9]{20,40})\"").matcher(html);
+            java.util.regex.Matcher m = CLIENT_ID_IN_PAGE.matcher(html);
 
             if (m.find() && !m.group(1).equals(sClientId)) {
                 Log.d(TAG, "Using the client id found on twitch.tv");
@@ -386,7 +382,7 @@ public final class TwitchApi {
             batches.add(logins.subList(from, Math.min(logins.size(), from + 6)));
         }
 
-        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(4);
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(Math.max(1, Math.min(4, batches.size())));
         List<ProviderMediaItem> result = new ArrayList<>();
         IOException lastError = null;
 
@@ -865,15 +861,24 @@ public final class TwitchApi {
         return value != null && !value.isEmpty() ? value : null;
     }
 
+    private static final java.util.regex.Pattern FRACTION = java.util.regex.Pattern.compile("\\.\\d+");
+    private static final java.util.regex.Pattern CLIENT_ID_IN_PAGE = java.util.regex.Pattern.compile("\"Client-ID\":\"([A-Za-z0-9]{20,40})\"");
+    private static final ThreadLocal<SimpleDateFormat> ISO_FORMAT = new ThreadLocal<SimpleDateFormat>() {
+        @Override
+        protected SimpleDateFormat initialValue() {
+            SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US);
+            format.setTimeZone(TimeZone.getTimeZone("UTC"));
+            return format;
+        }
+    };
+
     private static long parseDate(String iso) {
         if (iso == null) {
             return 0;
         }
 
         try {
-            SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US);
-            format.setTimeZone(TimeZone.getTimeZone("UTC"));
-            Date date = format.parse(iso.replaceAll("\\.\\d+", ""));
+            Date date = ISO_FORMAT.get().parse(FRACTION.matcher(iso).replaceAll(""));
             return date != null ? date.getTime() : 0;
         } catch (ParseException e) {
             return 0;

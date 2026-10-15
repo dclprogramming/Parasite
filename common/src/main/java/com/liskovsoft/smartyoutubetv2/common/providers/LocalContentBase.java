@@ -108,7 +108,7 @@ public abstract class LocalContentBase extends StubContentService {
      * Runs the loaders in parallel. A loader that fails is skipped; throws only if every loader failed.
      */
     protected List<MediaGroup> runParallel(List<Callable<ProviderMediaGroup>> tasks) throws Exception {
-        ExecutorService pool = Executors.newFixedThreadPool(4);
+        ExecutorService pool = Executors.newFixedThreadPool(Math.max(1, Math.min(4, tasks.size())));
         List<MediaGroup> result = new ArrayList<>();
         Exception lastError = null;
 

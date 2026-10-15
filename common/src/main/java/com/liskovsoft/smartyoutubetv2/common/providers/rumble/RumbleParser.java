@@ -43,6 +43,25 @@ public final class RumbleParser {
     /** Tallest picture picked from a list of mp4 files. */
     static final int MAX_HEIGHT = 1080;
 
+    // Compiled once: these run for every card of every list
+    private static final Pattern TAGS = Pattern.compile("(?s)<[^>]*>");
+    private static final Pattern SPACES = Pattern.compile("\\s+");
+    private static final Pattern NOT_DIGIT = Pattern.compile("[^0-9]");
+    private static final Pattern NOT_ALNUM = Pattern.compile("[^a-z0-9]");
+    private static final Pattern VERIFIED_SUFFIX = Pattern.compile("\\s*Verified$");
+    private static final Pattern RUMBLE_SUFFIX = Pattern.compile("\\s*[|\\-\u2013\u2014]\\s*Rumble.*$");
+    private static final Pattern SCHEMELESS = Pattern.compile("^//");
+    private static final Pattern TZ_COLON = Pattern.compile("([+-]\\d{2}):(\\d{2})$");
+    private static final Pattern TRAILING_Z = Pattern.compile("Z$");
+    private static final Pattern FRACTION = Pattern.compile("\\.\\d+");
+    private static final Pattern NOT_A_PICTURE = Pattern.compile("(?i).*(blank|placeholder|spacer|pixel|verified|badge|\\.svg|\\.gif)(\\?.*)?$");
+    private static final ThreadLocal<SimpleDateFormat> ISO_FORMAT = new ThreadLocal<SimpleDateFormat>() {
+        @Override
+        protected SimpleDateFormat initialValue() {
+            return new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.US);
+        }
+    };
+
     private RumbleParser() {
     }
 
@@ -55,10 +74,7 @@ public final class RumbleParser {
         public String channelId; // "c/Name" or "user/Name"
         public String channelName;
         public String channelThumb; // channel picture shown on the card
-        public String html;         // markup of the card (first few only), for the debug report
-        public String shadow;       // content of the card's shadow root (first few only)
         public String titleSource;  // where the title came from: attr, inner, link, heading, class, alt, slug...
-        public String tag;          // element name of the card, if it is a custom element
         public boolean live;
         public long durationSec;
         public long publishedMs;
@@ -290,9 +306,6 @@ public final class RumbleParser {
                 entry.publishedMs = parseIsoDate(blankToNull(card.optString("pub", "")));
                 entry.views = card.optLong("views");
                 entry.live = card.optBoolean("live", false);
-                entry.tag = blankToNull(card.optString("tag", ""));
-                entry.html = blankToNull(card.optString("html", ""));
-                entry.shadow = blankToNull(card.optString("shadow", ""));
                 result.add(entry);
             }
         } catch (org.json.JSONException e) {
@@ -355,7 +368,6 @@ public final class RumbleParser {
      */
     public static List<ProviderMediaItem> parseChannels(String html) {
         List<ProviderMediaItem> result = new ArrayList<>();
-        Set<String> seen = new HashSet<>();
 
         if (html == null) {
             return result;
@@ -381,7 +393,7 @@ public final class RumbleParser {
 
             if (thumb == null) { // picture drawn as a CSS background
                 Matcher bg = CSS_URL.matcher(anchor.group());
-                thumb = bg.find() ? unescape(bg.group(1)).replaceFirst("^//", "https://") : null;
+                thumb = bg.find() ? SCHEMELESS.matcher(unescape(bg.group(1))).replaceFirst("https://") : null;
             }
 
             if (thumb == null) { // the browser wrote the drawn picture into data-bg
@@ -389,7 +401,7 @@ public final class RumbleParser {
 
                 if (drawn.find()) {
                     Matcher bg = CSS_URL.matcher(unescape(drawn.group(1)));
-                    thumb = bg.find() ? bg.group(1).replaceFirst("^//", "https://") : null;
+                    thumb = bg.find() ? SCHEMELESS.matcher(bg.group(1)).replaceFirst("https://") : null;
                 }
             }
 
@@ -440,7 +452,7 @@ public final class RumbleParser {
         String name = named.find() ? textOf(named.group(1)) : null;
 
         if (name == null) {
-            for (String piece : inner.split("<[^>]*>")) {
+            for (String piece : TAGS.split(inner)) {
                 String text = textOf(piece);
 
                 if (text != null) {
@@ -451,7 +463,7 @@ public final class RumbleParser {
         }
 
         if (name != null) {
-            name = name.replaceAll("\\s*Verified$", "").trim();
+            name = VERIFIED_SUFFIX.matcher(name).replaceFirst("").trim();
         }
 
         return name == null || name.isEmpty() ? null : name;
@@ -483,7 +495,7 @@ public final class RumbleParser {
         }
 
         if (name != null) {
-            name = name.replaceAll("\\s*[|\\-–—]\\s*Rumble.*$", "").trim();
+            name = RUMBLE_SUFFIX.matcher(name).replaceFirst("").trim();
         }
 
         String fallbackName = channelId.substring(channelId.indexOf('/') + 1);
@@ -713,7 +725,7 @@ public final class RumbleParser {
             stream.title = textOf(root.optString("title", null));
 
             if (stream.title != null) {
-                stream.title = stream.title.replaceAll("\\s*[|\\-\u2013\u2014]\\s*Rumble.*$", "").trim();
+                stream.title = RUMBLE_SUFFIX.matcher(stream.title).replaceFirst("").trim();
             }
 
             stream.thumb = root.isNull("image") || root.optString("image", "").isEmpty() ? null : root.optString("image");
@@ -1040,10 +1052,10 @@ public final class RumbleParser {
         }
 
         try {
-            String normalized = value.trim().replaceFirst("([+-]\\d{2}):(\\d{2})$", "$1$2").replaceFirst("Z$", "+0000");
-            normalized = normalized.replaceFirst("\\.\\d+", ""); // drop fractions
-            SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.US);
-            Date date = format.parse(normalized);
+            String normalized = TZ_COLON.matcher(value.trim()).replaceFirst("$1$2");
+            normalized = TRAILING_Z.matcher(normalized).replaceFirst("+0000");
+            normalized = FRACTION.matcher(normalized).replaceFirst(""); // drop fractions
+            Date date = ISO_FORMAT.get().parse(normalized);
             return date != null ? date.getTime() : 0;
         } catch (ParseException e) {
             return 0;
@@ -1066,7 +1078,7 @@ public final class RumbleParser {
             String url = unescape(src.group(1));
             url = url.startsWith("//") ? "https:" + url : url; // pictures written without a scheme
 
-            if (url.matches("(?i).*(blank|placeholder|spacer|pixel|verified|badge|\\.svg|\\.gif)(\\?.*)?$")) {
+            if (NOT_A_PICTURE.matcher(url).matches()) {
                 continue; // not a channel picture
             }
 
@@ -1139,8 +1151,8 @@ public final class RumbleParser {
 
     /** Do two titles name the same video? Lenient: ignores case, spacing, punctuation and emoji; compares the start. */
     public static boolean titlesMatch(String a, String b) {
-        String na = a == null ? "" : a.toLowerCase(Locale.US).replaceAll("[^a-z0-9]", "");
-        String nb = b == null ? "" : b.toLowerCase(Locale.US).replaceAll("[^a-z0-9]", "");
+        String na = a == null ? "" : NOT_ALNUM.matcher(a.toLowerCase(Locale.US)).replaceAll("");
+        String nb = b == null ? "" : NOT_ALNUM.matcher(b.toLowerCase(Locale.US)).replaceAll("");
 
         if (na.isEmpty() || nb.isEmpty()) {
             return true; // nothing to compare
@@ -1175,7 +1187,7 @@ public final class RumbleParser {
             return null;
         }
 
-        String text = unescape(html.replaceAll("(?s)<[^>]*>", " ")).replaceAll("\\s+", " ").trim();
+        String text = SPACES.matcher(unescape(TAGS.matcher(html).replaceAll(" "))).replaceAll(" ").trim();
         return text.isEmpty() ? null : text;
     }
 
@@ -1190,7 +1202,7 @@ public final class RumbleParser {
 
     private static int parseInt(String value) {
         try {
-            return Integer.parseInt(value.replaceAll("[^0-9]", ""));
+            return Integer.parseInt(NOT_DIGIT.matcher(value).replaceAll(""));
         } catch (NumberFormatException e) {
             return 0;
         }

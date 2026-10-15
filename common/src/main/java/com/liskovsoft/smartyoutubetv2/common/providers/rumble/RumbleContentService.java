@@ -186,7 +186,6 @@ public class RumbleContentService extends LocalContentBase {
         return group;
     }
 
-    private static long sLastAccountSync;
     private static boolean sAccountSyncing;
     private static boolean sListPagesUseless; // no page that lists the followed channels was found this run
 
@@ -256,10 +255,6 @@ public class RumbleContentService extends LocalContentBase {
                 }
 
                 quiet = seen.size() == before ? quiet + 1 : 0;
-            }
-
-            synchronized (RumbleContentService.class) {
-                sLastAccountSync = System.currentTimeMillis();
             }
 
             if (!quick) {

@@ -5,7 +5,6 @@ import com.liskovsoft.mediaserviceinterfaces.CommentsService;
 import com.liskovsoft.mediaserviceinterfaces.data.CommentGroup;
 import io.reactivex.Observable;
 
-import java.util.Collections;
 
 public class StubCommentsService implements CommentsService {
     @Override

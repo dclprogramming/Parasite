@@ -37,6 +37,9 @@ final class RumbleStreamPicker {
     private static final long MIN_BYTES_PER_SECOND = 15_000;
     private static final int MAX_PROBES = 5;
     private static final int MAX_HEIGHT_FOR_FILE = 1080; // a file this tall is already the best size
+    private static final java.util.regex.Pattern RESOLUTION_HEIGHT = java.util.regex.Pattern.compile("RESOLUTION=\\d+x(\\d+)");
+    private static final java.util.regex.Pattern RESOLUTION_SIZE = java.util.regex.Pattern.compile("RESOLUTION=(\\d+)x(\\d+)");
+    private static final java.util.regex.Pattern STREAM_INF = java.util.regex.Pattern.compile("#EXT-X-STREAM-INF");
 
     private RumbleStreamPicker() {
     }
@@ -216,7 +219,7 @@ final class RumbleStreamPicker {
             return "playlist unreadable";
         }
 
-        java.util.regex.Matcher m = java.util.regex.Pattern.compile("RESOLUTION=\\d+x(\\d+)").matcher(text);
+        java.util.regex.Matcher m = RESOLUTION_HEIGHT.matcher(text);
         StringBuilder heights = new StringBuilder();
         int count = 0;
 
@@ -259,7 +262,7 @@ final class RumbleStreamPicker {
             }
 
             if (text != null) {
-                java.util.regex.Matcher m = java.util.regex.Pattern.compile("RESOLUTION=(\\d+)x(\\d+)").matcher(text);
+                java.util.regex.Matcher m = RESOLUTION_SIZE.matcher(text);
 
                 while (m.find()) {
                     count++;
@@ -267,7 +270,7 @@ final class RumbleStreamPicker {
                 }
 
                 if (count == 0) { // sizes not written out: count the listed streams instead
-                    java.util.regex.Matcher streams = java.util.regex.Pattern.compile("#EXT-X-STREAM-INF").matcher(text);
+                    java.util.regex.Matcher streams = STREAM_INF.matcher(text);
 
                     while (streams.find()) {
                         count++;
