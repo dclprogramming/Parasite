@@ -130,9 +130,10 @@ public final class RumbleApi {
             + "    });\n"
             + "  }\n"
             + "\n"
-            + "  // 2) Plain links: find each video's card as the biggest block holding only that video\n"
-            + "  if(!list.length){\n"
-            + "    strategy='links';\n"
+            + "  // 2) Plain links: find each video's card as the biggest block holding only that video. Also when the page has its own\n"
+            + "  // cards: category pages list the live streams as cards and the recorded videos as plain links\n"
+            + "  {\n"
+            + "    strategy=list.length?'mixed':'links';\n"
             + "    var collect=function(strict){\n"
             + "      return [].filter.call(root.querySelectorAll('a[href]'),function(a){\n"
             + "        if(!VID.test(a.getAttribute('href')||'')) return false;\n"
@@ -175,10 +176,15 @@ public final class RumbleApi {
             + "  }\n"
             + "\n"
             + "  if(!list.length){ return w.__pa>=8?'[]':''; }\n"
-            + "  try{window.scrollTo(0,document.body.scrollHeight);}catch(e){}\n"
+            + "  // scroll down a screen at a time (sections below only fill in when they come into view), until the bottom stays the bottom\n"
+            + "  if(!w.__st){w.__st=setInterval(function(){\n"
+            + "    try{var h=document.body.scrollHeight, y=window.pageYOffset||0, vh=window.innerHeight||0;\n"
+            + "      if(y+vh>=h-4){w.__sd=(w.__sd||0)+1; if(w.__sd>12){clearInterval(w.__st);}}\n"
+            + "      else{w.__sd=0; window.scrollBy(0,Math.max(300,vh*0.9));}}catch(e){}\n"
+            + "  },200);}\n"
             + "  // wait until the list stops growing (more cards load while scrolling)\n"
             + "  var same=(w.__pn===list.length); w.__ps=same?((w.__ps||0)+1):0; w.__pn=list.length;\n"
-            + "  if((w.__ps>=2&&w.__pa>=3)||w.__pa>=12) return JSON.stringify({strategy:strategy,cards:list});\n"
+            + "  if((w.__ps>=2&&w.__pa>=3&&(w.__sd||0)>=2)||w.__pa>=14) return JSON.stringify({strategy:strategy,cards:list});\n"
             + "  return '';\n"
             + "})()\n";
 
@@ -455,7 +461,7 @@ public final class RumbleApi {
 
     private static java.io.File storeDir(String key) {
         android.content.Context context = com.liskovsoft.smartyoutubetv2.common.prefs.ProviderData.getAppContext();
-        return context != null ? new java.io.File(context.getCacheDir(), key.startsWith("signed:") ? "rumble-signed" : "rumble-lists3") : null;
+        return context != null ? new java.io.File(context.getCacheDir(), key.startsWith("signed:") ? "rumble-signed" : "rumble-lists4") : null;
     }
 
     private static java.io.File storeFile(String key) {
