@@ -298,62 +298,6 @@ public final class RumbleApi {
         }
     }
 
-    private static final int WEEK_PAGES = 4;
-    private static final int WEEK_TOP_COUNT = 30;
-
-    /**
-     * The most viewed videos published during the last 7 days on a list (a category has no "most viewed" page of its own):
-     * the newest pages of the list, only what is under a week old, most viewed first.
-     */
-    public static List<RumbleParser.Entry> topOfWeek(String path) throws IOException {
-        long since = System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000;
-        List<RumbleParser.Entry> recent = new ArrayList<>(); // published within the week
-        java.util.Set<String> seen = new java.util.HashSet<>();
-
-        for (int page = 1; page <= WEEK_PAGES; page++) {
-            List<RumbleParser.Entry> entries;
-
-            try {
-                entries = listing(path, page);
-            } catch (IOException e) {
-                if (page == 1) {
-                    throw e;
-                }
-
-                break; // what was read is enough
-            }
-
-            if (entries.isEmpty()) {
-                break;
-            }
-
-            boolean reachedOlder = false;
-
-            for (RumbleParser.Entry entry : entries) {
-                // A live stream keeps the time it went live (it can be weeks old) and is listed first: it says nothing about
-                // how far back the list reaches
-                if (!entry.live && entry.publishedMs > 0 && entry.publishedMs < since) {
-                    reachedOlder = true;
-                }
-
-                if (entry.views > 0 && !entry.live && seen.add(entry.id)) {
-                    if (entry.publishedMs <= 0 || entry.publishedMs >= since) {
-                        recent.add(entry);
-                    }
-                }
-            }
-
-            if (reachedOlder || entries.size() < MIN_FULL_PAGE) {
-                break; // the list is older than a week from here on
-            }
-        }
-
-        List<RumbleParser.Entry> pool = recent;
-
-        Collections.sort(pool, (a, b) -> Long.compare(b.views, a.views));
-        return pool.size() > WEEK_TOP_COUNT ? new ArrayList<>(pool.subList(0, WEEK_TOP_COUNT)) : pool;
-    }
-
     private static final java.util.Set<String> REFRESHING = java.util.Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap<String, Boolean>());
 
     private static void refreshInBackground(String path, int page) {
@@ -565,6 +509,11 @@ public final class RumbleApi {
 
     public static String categoryPath(String category) {
         return "/category/" + category;
+    }
+
+    /** Search results for a word, most viewed first, within a time range ("this-week"). Rumble does the sorting. */
+    public static String searchTopOfWeekPath(String text, String range) {
+        return "/search/video?q=" + encode(text) + "&sort=views&date=" + range;
     }
 
     public static String channelPath(String channelId) {

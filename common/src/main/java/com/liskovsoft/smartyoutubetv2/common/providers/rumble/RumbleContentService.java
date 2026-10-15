@@ -29,16 +29,16 @@ public class RumbleContentService extends LocalContentBase {
     private static class Row {
         final String title;
         final String path;
-        final boolean topOfWeek; // most viewed of the last 7 days of the list at path
+        final String fallbackPath; // used when path gives nothing (may be null)
 
         Row(String title, String path) {
-            this(title, path, false);
+            this(title, path, null);
         }
 
-        Row(String title, String path, boolean topOfWeek) {
+        Row(String title, String path, String fallbackPath) {
             this.title = title;
             this.path = path;
-            this.topOfWeek = topOfWeek;
+            this.fallbackPath = fallbackPath;
         }
     }
 
@@ -98,7 +98,8 @@ public class RumbleContentService extends LocalContentBase {
         String path = RumbleApi.categoryPath(category);
         List<Row> rows = new ArrayList<>();
         rows.add(new Row("Latest", path));
-        rows.add(new Row("Top Videos this week", path, true)); // newest videos of the category from the last 7 days, most viewed first
+        // Rumble sorts this itself (no view counts needed on the cards): searches for the category name, most viewed of the week
+        rows.add(new Row("Most viewed this week", RumbleApi.searchTopOfWeekPath(category, "this-week"), RumbleApi.searchTopOfWeekPath(category, "week")));
         return rows;
     }
 
@@ -106,35 +107,40 @@ public class RumbleContentService extends LocalContentBase {
         List<Callable<ProviderMediaGroup>> tasks = new ArrayList<>();
 
         for (Row row : rows) {
-            tasks.add(row.topOfWeek ? () -> topOfWeekRow(type, row.title, row.path) : () -> videoPage(type, row.title, row.path, 1));
+            tasks.add(() -> {
+                ProviderMediaGroup group = videoPage(type, row.title, row.path, 1);
+                return group.isEmpty() && row.fallbackPath != null ? videoPage(type, row.title, row.fallbackPath, 1) : group;
+            });
         }
 
         return runParallel(tasks);
-    }
-
-    private ProviderMediaGroup topOfWeekRow(int type, String title, String path) throws IOException {
-        ProviderMediaGroup group = new ProviderMediaGroup(type, title);
-
-        for (RumbleParser.Entry entry : RumbleApi.topOfWeek(path)) {
-            group.add(entry.toMediaItem());
-        }
-
-        return group;
     }
 
     /**
      * One page of videos. The group knows how to load the next page.
      */
     private ProviderMediaGroup videoPage(int type, String title, String path, int page) throws IOException {
+        return videoPage(type, title, path, page, new java.util.HashSet<>());
+    }
+
+    /**
+     * Keeps going for as long as a page brings videos not seen on the earlier pages (no minimum page size: a short page
+     * is not the last one), so a list is only as long as the site's own list.
+     */
+    private ProviderMediaGroup videoPage(int type, String title, String path, int page, java.util.Set<String> seen) throws IOException {
         List<RumbleParser.Entry> entries = RumbleApi.listing(path, page);
         ProviderMediaGroup group = new ProviderMediaGroup(type, title);
+        int added = 0;
 
         for (RumbleParser.Entry entry : entries) {
-            group.add(entry.toMediaItem());
+            if (seen.add(entry.id)) {
+                group.add(entry.toMediaItem());
+                added++;
+            }
         }
 
-        if (entries.size() >= RumbleApi.MIN_FULL_PAGE) {
-            group.setNext(() -> videoPage(type, title, path, page + 1));
+        if (added > 0) {
+            group.setNext(() -> videoPage(type, title, path, page + 1, seen));
         }
 
         return group;
