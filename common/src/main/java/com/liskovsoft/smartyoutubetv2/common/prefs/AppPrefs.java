@@ -89,6 +89,22 @@ public class AppPrefs extends SharedPreferencesBase implements AccountChangeList
         setData(getProfileKey(STATE_UPDATER_DATA, true), data);
     }
 
+    /**
+     * Watch states of one provider. YouTube keeps the original key (so existing data stays valid),
+     * Rumble and Twitch each get a key of their own so their videos never show up in the YouTube history.
+     */
+    public String getStateUpdaterData(int provider) {
+        return getData(getProfileKey(stateKey(provider), true));
+    }
+
+    public void setStateUpdaterData(int provider, String data) {
+        setData(getProfileKey(stateKey(provider), true), data);
+    }
+
+    private static String stateKey(int provider) {
+        return provider == ProviderData.YOUTUBE ? STATE_UPDATER_DATA : STATE_UPDATER_DATA + "_provider" + provider;
+    }
+
     public String getChannelGroupData() {
         // Always use multiple profiles
         return getData(getProfileKey(CHANNEL_GROUP_DATA,  true));

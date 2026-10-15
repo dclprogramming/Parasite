@@ -90,7 +90,17 @@ public final class RumbleApi {
             + "  }\n"
             + "  function num(s){var m=/(\\d[\\d.,]*)\\s*([kKmMbB])?/.exec(s||'');if(!m) return 0;var n=parseFloat(m[1].replace(/,/g,''));if(isNaN(n)) return 0;var u=(m[2]||'').toLowerCase();return Math.round(n*(u==='k'?1e3:u==='m'?1e6:u==='b'?1e9:1));}\n"
             + "  function allText(root){var t='';(function walk(n){if(n.nodeType===3){t+=n.nodeValue+' ';return;}if(n.nodeType!==1&&n.nodeType!==11) return;if(n.shadowRoot) walk(n.shadowRoot);var k=n.childNodes;for(var i=0;i<k.length;i++) walk(k[i]);})(root);return t;}\n"
+            + "  // the card element keeps its numbers as JS properties (this.views, total.views), not always as attributes or text\n"
+            + "  function propViews(e){\n"
+            + "    var c=[e.views,e.viewCount,e.view_count,e.total&&e.total.views,e.stats&&e.stats.views,e.data&&e.data.views,e.video&&e.video.views,e.item&&e.item.views,e.model&&e.model.views];\n"
+            + "    for(var i=0;i<c.length;i++){var v=c[i];\n"
+            + "      if(typeof v==='number'&&v>0) return Math.round(v);\n"
+            + "      if(typeof v==='string'){var n=num(v);if(n) return n;}}\n"
+            + "    return 0;\n"
+            + "  }\n"
             + "  function viewsOf(el){\n"
+            + "    var holders=[el].concat(deep(el,'*').filter(function(e){return e.tagName&&e.tagName.indexOf('-')>0;}));\n"
+            + "    for(var h=0;h<holders.length;h++){var pv=propViews(holders[h]);if(pv) return pv;}\n"
             + "    var names=el.getAttributeNames?el.getAttributeNames():[];\n"
             + "    for(var i=0;i<names.length;i++){if(/view/i.test(names[i])){var n=num(el.getAttribute(names[i]));if(n) return n;}}\n"
             + "    var t=allText(el).replace(/\\s+/g,' ');\n"
@@ -293,16 +303,12 @@ public final class RumbleApi {
 
     /**
      * The most viewed videos published during the last 7 days on a list (a category has no "most viewed" page of its own):
-     * the newest pages of the list, only what is under a week old, most viewed first. Empty when the page shows no view counts.
+     * the newest pages of the list, only what is under a week old, most viewed first.
      */
     public static List<RumbleParser.Entry> topOfWeek(String path) throws IOException {
         long since = System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000;
         List<RumbleParser.Entry> recent = new ArrayList<>(); // published within the week
-        List<RumbleParser.Entry> any = new ArrayList<>();    // whatever was read, if the week turns out empty
         java.util.Set<String> seen = new java.util.HashSet<>();
-        RumbleParser.Entry sample = null;
-        StringBuilder facts = new StringBuilder();
-        int total = 0, live = 0, withViews = 0, older = 0;
 
         for (int page = 1; page <= WEEK_PAGES; page++) {
             List<RumbleParser.Entry> entries;
@@ -323,36 +329,14 @@ public final class RumbleApi {
 
             boolean reachedOlder = false;
 
-            if (sample == null && entries.get(0).html != null) {
-                sample = entries.get(0);
-            }
-
             for (RumbleParser.Entry entry : entries) {
-                total++;
-
-                if (facts.length() < 400) {
-                    facts.append(entry.live ? "live" : "video").append(" views=").append(entry.views)
-                            .append(" age=").append(entry.publishedMs > 0 ? (System.currentTimeMillis() - entry.publishedMs) / 3_600_000 + "h" : "?").append("; ");
-                }
-
-                if (entry.live) {
-                    live++;
-                }
-
-                if (entry.views > 0) {
-                    withViews++;
-                }
-
                 // A live stream keeps the time it went live (it can be weeks old) and is listed first: it says nothing about
                 // how far back the list reaches
                 if (!entry.live && entry.publishedMs > 0 && entry.publishedMs < since) {
-                    older++;
                     reachedOlder = true;
                 }
 
                 if (entry.views > 0 && !entry.live && seen.add(entry.id)) {
-                    any.add(entry);
-
                     if (entry.publishedMs <= 0 || entry.publishedMs >= since) {
                         recent.add(entry);
                     }
@@ -364,12 +348,7 @@ public final class RumbleApi {
             }
         }
 
-        List<RumbleParser.Entry> pool = !recent.isEmpty() ? recent : any; // a quiet category: the most viewed of what it has
-
-        if (pool.isEmpty() && sample != null) {
-            RumbleDebug.noViews(path, sample, "cards read " + total + ", live " + live + ", with a view count " + withViews
-                    + ", older than a week " + older + ". First cards: " + facts);
-        }
+        List<RumbleParser.Entry> pool = recent;
 
         Collections.sort(pool, (a, b) -> Long.compare(b.views, a.views));
         return pool.size() > WEEK_TOP_COUNT ? new ArrayList<>(pool.subList(0, WEEK_TOP_COUNT)) : pool;
@@ -461,7 +440,7 @@ public final class RumbleApi {
 
     private static java.io.File storeDir(String key) {
         android.content.Context context = com.liskovsoft.smartyoutubetv2.common.prefs.ProviderData.getAppContext();
-        return context != null ? new java.io.File(context.getCacheDir(), key.startsWith("signed:") ? "rumble-signed" : "rumble-lists4") : null;
+        return context != null ? new java.io.File(context.getCacheDir(), key.startsWith("signed:") ? "rumble-signed" : "rumble-lists5") : null;
     }
 
     private static java.io.File storeFile(String key) {

@@ -1,13 +1,8 @@
 package com.liskovsoft.smartyoutubetv2.common.providers.rumble;
 
-import android.content.Context;
-import android.os.Handler;
-import android.os.Looper;
 import android.util.Log;
 
-import com.liskovsoft.sharedutils.helpers.MessageHelpers;
 import com.liskovsoft.smartyoutubetv2.common.providers.BrowserFetcher;
-import com.liskovsoft.smartyoutubetv2.common.prefs.ProviderData;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -107,49 +102,6 @@ final class RumbleDebug {
         }
 
         show("Rumble check (photograph this screen)", text.toString());
-    }
-
-    private static boolean sNoViewsShown;
-
-    /**
-     * "Top this week" needs the view count of each card. When none can be read, show (once per run) what a card looks like,
-     * so the page script can be taught where the count is. Call from any thread.
-     */
-    static void noViews(String path, RumbleParser.Entry sample, String facts) {
-        synchronized (RumbleDebug.class) {
-            if (sNoViewsShown) {
-                return;
-            }
-
-            sNoViewsShown = true;
-        }
-
-        StringBuilder text = new StringBuilder();
-        text.append("No usable view count on the cards of ").append(path).append(".\n").append(facts).append("\n\n");
-        text.append("Card: ").append(sample.html != null && sample.html.length() > 650 ? sample.html.substring(0, 650) : sample.html).append("\n\n");
-
-        if (sample.shadow != null) {
-            text.append("Inside: ").append(sample.shadow.length() > 450 ? sample.shadow.substring(0, 450) : sample.shadow);
-        }
-
-        Log.w(TAG, text.toString());
-        Context context = ProviderData.getAppContext();
-
-        if (context == null) {
-            return;
-        }
-
-        new Handler(Looper.getMainLooper()).post(() -> {
-            try {
-                com.liskovsoft.smartyoutubetv2.common.app.presenters.AppDialogPresenter dialog =
-                        com.liskovsoft.smartyoutubetv2.common.app.presenters.AppDialogPresenter.instance(context);
-                dialog.appendLongTextCategory("Rumble card (photograph this screen)",
-                        com.liskovsoft.smartyoutubetv2.common.app.models.playback.ui.UiOptionItem.from(text.toString()));
-                dialog.showDialog("Rumble: \"Top this week\" needs view counts");
-            } catch (RuntimeException e) {
-                Log.w(TAG, "Could not show the report: " + e);
-            }
-        });
     }
 
     /** Diagnostics are written to the log only; no dialog or message is shown on screen. */

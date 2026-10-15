@@ -98,7 +98,7 @@ public class RumbleContentService extends LocalContentBase {
         String path = RumbleApi.categoryPath(category);
         List<Row> rows = new ArrayList<>();
         rows.add(new Row("Latest", path));
-        rows.add(new Row("Top this week", path, true)); // built from the newest videos by view count: category pages cannot be sorted
+        rows.add(new Row("Top Videos this week", path, true)); // newest videos of the category from the last 7 days, most viewed first
         return rows;
     }
 

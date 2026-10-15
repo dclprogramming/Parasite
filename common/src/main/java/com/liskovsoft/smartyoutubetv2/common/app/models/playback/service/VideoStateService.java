@@ -9,6 +9,7 @@ import com.liskovsoft.sharedutils.helpers.Helpers;
 import com.liskovsoft.smartyoutubetv2.common.app.models.data.Video;
 import com.liskovsoft.smartyoutubetv2.common.prefs.AppPrefs;
 import com.liskovsoft.smartyoutubetv2.common.prefs.AppPrefs.ProfileChangeListener;
+import com.liskovsoft.smartyoutubetv2.common.prefs.ProviderData;
 import com.liskovsoft.smartyoutubetv2.common.utils.Utils;
 
 import java.util.List;
@@ -106,7 +107,13 @@ public class VideoStateService implements ProfileChangeListener {
 
     private void restoreState() {
         mStates.clear();
-        String data = mPrefs.getStateUpdaterData();
+        int provider = ProviderData.getSelected();
+        String data = mPrefs.getStateUpdaterData(provider);
+
+        if (provider != ProviderData.YOUTUBE && data == null) {
+            // First run of this provider with its own log: take over its videos that were saved in the shared (YouTube) log
+            data = mPrefs.getStateUpdaterData();
+        }
 
         String[] split = Helpers.splitData(data);
 
@@ -116,12 +123,34 @@ public class VideoStateService implements ProfileChangeListener {
     }
 
     private void persistStateInt() {
+        int provider = ProviderData.getSelected();
+
         if (mIsHistoryBroken) {
-            mPrefs.setStateUpdaterData(Helpers.mergeData(getStateData(), mIsHistoryBroken));
+            mPrefs.setStateUpdaterData(provider, Helpers.mergeData(getStateData(), mIsHistoryBroken));
         } else {
             // Eliminate additional string creation with the merge
-            mPrefs.setStateUpdaterData(getStateData());
+            mPrefs.setStateUpdaterData(provider, getStateData());
         }
+    }
+
+    /**
+     * Which provider a video id belongs to. Twitch ids carry a prefix, Rumble ids look like "v7cwvbs-some-title",
+     * YouTube ids are 11 characters.
+     */
+    private static int providerOf(String videoId) {
+        if (videoId == null || videoId.isEmpty()) {
+            return ProviderData.YOUTUBE;
+        }
+
+        if (videoId.startsWith("live:") || videoId.startsWith("vod:")) {
+            return ProviderData.TWITCH;
+        }
+
+        if (videoId.length() != 11 && videoId.matches("v[0-9a-z]{3,12}(-.*)?")) {
+            return ProviderData.RUMBLE;
+        }
+
+        return ProviderData.YOUTUBE;
     }
 
     public void persistNow() {
@@ -223,7 +252,8 @@ public class VideoStateService implements ProfileChangeListener {
             for (String spec : split) {
                 State state = State.from(spec);
 
-                if (state != null) {
+                // Only videos of the current provider: drops Rumble/Twitch videos that were mixed into the YouTube log
+                if (state != null && providerOf(state.video != null ? state.video.videoId : null) == ProviderData.getSelected()) {
                     mStates.add(state);
                 }
             }
