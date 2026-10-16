@@ -44,8 +44,3 @@ Colours: `common/src/main/res/values/colors.xml` and `smarttubetv/src/main/res/v
 (palette "Nebula"; colour *names* are unchanged from upstream, e.g. `semi_red` is the brand accent).
 Icons/banner/logos: `smarttubetv/src/main/res/mipmap-nodpi/app_*.png` (same file names as upstream).
 App name: `smarttubetv/src/main/res/values/strings.xml` and `src/stfdroid/res/values/strings.xml`.
-
-## Not tested
-
-Nothing here has been compiled or run (the author's environment has no Android toolchain). Expect to paste
-GitHub Actions logs back to fix build errors. See SECURITY_CHANGES.md > "Unverified".
