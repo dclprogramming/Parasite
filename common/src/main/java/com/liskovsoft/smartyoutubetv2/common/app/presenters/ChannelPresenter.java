@@ -390,8 +390,11 @@ public class ChannelPresenter extends BasePresenter<ChannelView> implements Vide
 
     public boolean onSearchSubmit(String query) {
         Observable<MediaGroup> search = getContentService().getChannelSearchObserve(getChannelId(), query);
+        final boolean[] gotResults = {false};
         Disposable result = search.subscribe(
                 items -> {
+                    gotResults[0] = true;
+
                     if (getView() == null) {
                         return;
                     }
@@ -409,7 +412,15 @@ public class ChannelPresenter extends BasePresenter<ChannelView> implements Vide
                     getView().update(update);
                     getView().setPosition(1);
                 },
-                error -> Log.e(TAG, "onSearchSubmit error: %s", error.getMessage())
+                error -> {
+                    Log.e(TAG, "onSearchSubmit error: %s", error.getMessage());
+                    MessageHelpers.showLongMessage(getContext(), "Search failed: " + error.getMessage());
+                },
+                () -> {
+                    if (!gotResults[0] && getView() != null) {
+                        MessageHelpers.showMessage(getContext(), R.string.nothing_found);
+                    }
+                }
         );
 
         return true;

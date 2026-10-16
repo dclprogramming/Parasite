@@ -478,6 +478,18 @@ public class RumbleContentService extends LocalContentBase {
         return group;
     }
 
+    @Override
+    public Observable<MediaGroup> getChannelSearchObserve(String channelId, String query) {
+        return RxHelper.fromCallable(() -> {
+            if (channelId == null) {
+                return new ProviderMediaGroup(MediaGroup.TYPE_CHANNEL_UPLOADS, "Search: " + query);
+            }
+
+            return searchChannelPages(MediaGroup.TYPE_CHANNEL_UPLOADS, channelId, query,
+                    videoPage(MediaGroup.TYPE_CHANNEL_UPLOADS, "Uploads", RumbleApi.channelPath(channelId), 1));
+        });
+    }
+
     // Search
 
     @Override

@@ -23,6 +23,57 @@ import java.util.concurrent.Future;
  * followed channels and watch history live in a local {@link ProviderStore}.
  */
 public abstract class LocalContentBase extends StubContentService {
+    private static final int CHANNEL_SEARCH_PAGES = 5;   // how far into a channel's list a search looks
+    private static final int CHANNEL_SEARCH_MAX = 60;    // stop once this many videos matched
+
+    /**
+     * Search inside one channel. These sites give no channel search of their own, so the channel's list is read
+     * page by page (the pages are cached, so the ones already seen cost nothing) and kept where the title has every
+     * word of the query.
+     */
+    protected static ProviderMediaGroup searchChannelPages(int type, String channelId, String query, ProviderMediaGroup... firstPages) throws Exception {
+        ProviderMediaGroup result = new ProviderMediaGroup(type, "Search: " + query);
+        result.setChannelId(channelId);
+
+        String[] words = query == null ? new String[0] : query.toLowerCase(java.util.Locale.ROOT).trim().split("\\s+");
+
+        if (words.length == 0 || words[0].isEmpty()) {
+            return result;
+        }
+
+        java.util.Set<String> seen = new java.util.HashSet<>();
+
+        for (ProviderMediaGroup page : firstPages) {
+            for (int i = 0; page != null && i < CHANNEL_SEARCH_PAGES && result.getMediaItems().size() < CHANNEL_SEARCH_MAX; i++) {
+                for (MediaItem item : page.getMediaItems()) {
+                    if (matchesAll(item.getTitle(), words) && seen.add(item.getVideoId() != null ? item.getVideoId() : String.valueOf(item.getTitle()))) {
+                        result.add(item);
+                    }
+                }
+
+                page = page.getNext() != null ? page.getNext().load() : null;
+            }
+        }
+
+        return result;
+    }
+
+    private static boolean matchesAll(CharSequence title, String[] words) {
+        if (title == null) {
+            return false;
+        }
+
+        String lower = title.toString().toLowerCase(java.util.Locale.ROOT);
+
+        for (String word : words) {
+            if (!lower.contains(word)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     protected final ProviderStore mStore;
 
     protected LocalContentBase(ProviderStore store) {

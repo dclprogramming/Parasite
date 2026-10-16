@@ -462,6 +462,19 @@ public class TwitchContentService extends LocalContentBase {
         return videosPage(MediaGroup.TYPE_CHANNEL_UPLOADS, "Past broadcasts", login, "ARCHIVE", null);
     }
 
+    @Override
+    public Observable<MediaGroup> getChannelSearchObserve(String login, String query) {
+        return RxHelper.fromCallable(() -> {
+            if (login == null || login.startsWith(TwitchApi.GAME_PREFIX)) { // a category has no past videos to search
+                return new ProviderMediaGroup(MediaGroup.TYPE_CHANNEL_UPLOADS, "Search: " + query);
+            }
+
+            return searchChannelPages(MediaGroup.TYPE_CHANNEL_UPLOADS, login, query,
+                    videosPage(MediaGroup.TYPE_CHANNEL_UPLOADS, "Past broadcasts", login, "ARCHIVE", null),
+                    videosPage(MediaGroup.TYPE_CHANNEL_UPLOADS, "Highlights", login, "HIGHLIGHT", null));
+        });
+    }
+
     // Search
 
     @Override
