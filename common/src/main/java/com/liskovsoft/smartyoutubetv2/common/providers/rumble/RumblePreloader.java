@@ -59,9 +59,7 @@ public final class RumblePreloader {
                 paths.add(path);
             }
 
-            paths.add(path + "#2"); // "Top this week" is built from the first pages of the category
-            paths.add(path + "#3");
-            paths.add(path + "#4");
+            paths.add(RumbleApi.searchTopOfWeekPath(category, "this-week")); // the "Most viewed this week" row
         }
 
         return paths;
