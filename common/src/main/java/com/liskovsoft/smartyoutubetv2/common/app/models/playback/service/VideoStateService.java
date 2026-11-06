@@ -106,9 +106,12 @@ public class VideoStateService implements ProfileChangeListener {
         return mSessionStartTimeMs;
     }
 
+    private int mLoadedProvider = ProviderData.YOUTUBE;
+
     private void restoreState() {
         mStates.clear();
         int provider = ProviderData.getSelected();
+        mLoadedProvider = provider; // persist back under the SAME provider, even if the selection has changed by then
         String data = mPrefs.getStateUpdaterData(provider);
 
         if (provider != ProviderData.YOUTUBE && data == null) {
@@ -124,7 +127,7 @@ public class VideoStateService implements ProfileChangeListener {
     }
 
     private void persistStateInt() {
-        int provider = ProviderData.getSelected();
+        int provider = mLoadedProvider;
 
         if (mIsHistoryBroken) {
             mPrefs.setStateUpdaterData(provider, Helpers.mergeData(getStateData(), mIsHistoryBroken));

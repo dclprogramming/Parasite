@@ -13,6 +13,7 @@ import com.liskovsoft.smartyoutubetv2.common.exoplayer.selector.FormatItem;
 import com.liskovsoft.smartyoutubetv2.common.misc.BufferingDetector;
 import com.liskovsoft.smartyoutubetv2.common.misc.BufferingDetector.OnLongBuffering;
 import com.liskovsoft.smartyoutubetv2.common.prefs.PlayerData;
+import com.liskovsoft.smartyoutubetv2.common.prefs.ProviderData;
 import com.liskovsoft.smartyoutubetv2.common.prefs.PlayerTweaksData;
 import com.liskovsoft.smartyoutubetv2.common.utils.Utils;
 import com.liskovsoft.smartyoutubetv2.common.providers.ProviderServices;
@@ -135,6 +136,17 @@ public class ErrorFixerController extends BasePlayerController implements OnLong
         String errorContent = error != null ? error.getMessage() : null;
         String errorTitle = getErrorTitle(type, rendererIndex);
         String errorMessage = errorTitle + "\n" + errorContent;
+
+        // Rumble/Twitch errors must never rewrite the settings that YouTube plays with.
+        // Everything below this point persists (data source, format, buffer, decoder...).
+        if (ProviderData.getSelected() != ProviderData.YOUTUBE) {
+            MessageHelpers.showLongMessage(getContext(), errorMessage);
+            if (getPlayer() != null) {
+                getPlayer().setTitle(errorContent);
+            }
+            mVideoLoaderController.reloadVideo();
+            return;
+        }
 
         if (Helpers.startsWithAny(errorContent, "Unable to connect to")) {
             // No internet connection or WRONG DATE on the device
