@@ -238,6 +238,7 @@
     <string name="player_unexpected_error">Unexpected playback error</string>
     <string name="video_aspect">Aspect ratio</string>
     <string name="player_tweaks">Developer options</string>
+    <string name="fix_stalled_client">Fix stalled client</string>
     <string name="header_uploads">Uploads</string>
     <string name="player_show_global_clock">Show always-on-screen clock</string>
     <string name="player_show_global_ending_time">Show always-on-screen ending time</string>

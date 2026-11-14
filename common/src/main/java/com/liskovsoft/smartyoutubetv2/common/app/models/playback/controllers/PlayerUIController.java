@@ -609,6 +609,8 @@ public class PlayerUIController extends BasePlayerController {
             onPipClicked();
         } else if (buttonId == R.id.action_search) {
             onSearchClicked();
+        } else if (buttonId == R.id.action_fix_stalled) {
+            getController(ErrorFixerController.class).fixStalledClient();
         } else if (buttonId == R.id.action_video_stats) {
             onDebugInfoClicked(buttonState);
         } else if (buttonId == R.id.action_playlist_add) {

@@ -52,6 +52,7 @@ import com.liskovsoft.smartyoutubetv2.tv.ui.playback.actions.ThumbsDownAction;
 import com.liskovsoft.smartyoutubetv2.tv.ui.playback.actions.ThumbsUpAction;
 import com.liskovsoft.smartyoutubetv2.tv.ui.playback.actions.VideoSpeedAction;
 import com.liskovsoft.smartyoutubetv2.tv.ui.playback.actions.VideoStatsAction;
+import com.liskovsoft.smartyoutubetv2.tv.ui.playback.actions.FixStalledAction;
 import com.liskovsoft.smartyoutubetv2.tv.ui.playback.actions.VideoZoomAction;
 import com.liskovsoft.smartyoutubetv2.tv.util.ViewUtil;
 
@@ -121,6 +122,7 @@ public class VideoPlayerGlue extends MaxControlsVideoPlayerGlue<PlayerAdapter> i
         putAction(new VideoInfoAction(context));
         putAction(new VideoSpeedAction(context));
         putAction(new VideoStatsAction(context));
+        putAction(new FixStalledAction(context));
         putAction(new SearchAction(context));
         putAction(new PipAction(context));
         putAction(new AFRAction(context));
@@ -237,6 +239,8 @@ public class VideoPlayerGlue extends MaxControlsVideoPlayerGlue<PlayerAdapter> i
         if (mPlayerTweaksData.isPlayerButtonEnabled(PlayerTweaksData.PLAYER_BUTTON_VIDEO_STATS)) {
             adapter.add(mActions.get(R.id.action_video_stats));
         }
+        // Always visible: no settings toggle, so it also shows up on existing installs
+        adapter.add(mActions.get(R.id.action_fix_stalled));
     }
 
     @Override

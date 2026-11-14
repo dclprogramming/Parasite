@@ -51,7 +51,8 @@ public class ErrorFixerController extends BasePlayerController implements OnLong
             disableSubtitles();
             mVideoLoaderController.reloadVideo();
         } else if (!mBufferingDetector.isPlayable()) {
-            if (getPlayerTweaksData().getPlayerDataSource() != PlayerTweaksData.PLAYER_DATA_SOURCE_OKHTTP
+            if (ProviderData.getSelected() == ProviderData.YOUTUBE // this fix is persistent: never apply it because of Rumble/Twitch
+                && getPlayerTweaksData().getPlayerDataSource() != PlayerTweaksData.PLAYER_DATA_SOURCE_OKHTTP
                 && getPlayerTweaksData().getPreferredDnsType() != PlayerTweaksData.DNS_TYPE_SYSTEM
                 && !getPlayerTweaksData().isNetworkErrorFixingDisabled()) {
                 // Wrong DNS resolving could cause hanging at start
@@ -61,9 +62,7 @@ public class ErrorFixerController extends BasePlayerController implements OnLong
                 mVideoLoaderController.restartEngine();
             } else {
                 // Also, some clients like ANDROID_REEL may just hang at start
-                MessageHelpers.showLongMessage(getContext(), "Fixing stalled client...");
-                ProviderServices.manager().switchNextClientNow();
-                mVideoLoaderController.reloadVideo();
+                fixStalledClient();
             }
         } else {
             // NOTE: The bug. Avoid calling reloadVideo() after lowering the quality.
@@ -74,6 +73,20 @@ public class ErrorFixerController extends BasePlayerController implements OnLong
             // SABR may hang if the server issues a high backoffTime
             mVideoLoaderController.restartEngine();
         }
+    }
+
+    /**
+     * Switches to the next client and reloads the video.<br/>
+     * Runs automatically on long buffering at start and manually from the player button.
+     */
+    public void fixStalledClient() {
+        if (getPlayer() == null) {
+            return;
+        }
+
+        MessageHelpers.showLongMessage(getContext(), "Fixing stalled client...");
+        ProviderServices.manager().switchNextClientNow();
+        mVideoLoaderController.reloadVideo();
     }
 
     @Override
