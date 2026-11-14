@@ -13,6 +13,9 @@ import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import android.widget.TextView;
 
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 import com.liskovsoft.smartyoutubetv2.common.prefs.ProviderData;
 
 /**
@@ -82,6 +85,16 @@ public final class ProviderLoginDialog {
             + "  sweep();\n"
             + "})();\n";
 
+    private static String chromeVersionOf(String ua) {
+        Matcher m = Pattern.compile("Chrome/([\\d.]+)").matcher(ua == null ? "" : ua);
+
+        return m.find() ? m.group(1) : "120.0.0.0";
+    }
+
+    private static String desktopChromeUa(String chromeVersion) {
+        return "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/" + chromeVersion + " Safari/537.36";
+    }
+
     public static void show(Context context, int provider, String hint, OnClosed onClosed) {
         String loginUrl = provider == ProviderData.RUMBLE ? "https://rumble.com/login.php" : "https://www.twitch.tv/login";
         Dialog dialog = new Dialog(context, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
@@ -90,7 +103,14 @@ public final class ProviderLoginDialog {
         WebSettings settings = web.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
-        settings.setUserAgentString(settings.getUserAgentString().replace("; wv", "")); // plain Chrome, like the page expects
+        String webViewUa = settings.getUserAgentString();
+        String chromeVersion = chromeVersionOf(webViewUa);
+        // Twitch rejects WebView/mobile user agents ("browser not supported"): present a plain desktop Chrome
+        // with the WebView's real Chrome version. Rumble keeps the previous behavior.
+        settings.setUserAgentString(provider == ProviderData.TWITCH ? desktopChromeUa(chromeVersion) : webViewUa.replace("; wv", "")); // plain Chrome, like the page expects
+        if (provider == ProviderData.TWITCH) {
+            hint = hint + " (WebView Chrome " + chromeVersion.split("\\.")[0] + ")";
+        }
 
         CookieManager cookies = CookieManager.getInstance();
         cookies.setAcceptCookie(true);
