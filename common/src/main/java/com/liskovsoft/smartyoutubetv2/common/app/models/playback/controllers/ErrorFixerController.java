@@ -70,8 +70,13 @@ public class ErrorFixerController extends BasePlayerController implements OnLong
             //lowerVideoQuality();
             //mVideoLoaderController.restartEngine();
 
-            // SABR may hang if the server issues a high backoffTime
-            mVideoLoaderController.restartEngine();
+            if (ProviderData.getSelected() == ProviderData.YOUTUBE) {
+                // Video froze in the middle of playback: restarting the engine doesn't help, switching the client does
+                fixStalledClient();
+            } else {
+                // SABR may hang if the server issues a high backoffTime
+                mVideoLoaderController.restartEngine();
+            }
         }
     }
 
@@ -99,7 +104,8 @@ public class ErrorFixerController extends BasePlayerController implements OnLong
         mBufferingDetector.reset();
         // Needed to detect additional buffering (e.g. hanged clients).
         // Don't worry this event will be canceled by subsequent onPlay() or onPause() if everything is ok.
-        mBufferingDetector.onStartBuffering();
+        // Seeks legitimately buffer for a while: use the patient mode, not the 5 sec one.
+        mBufferingDetector.onStartBuffering(false);
     }
 
     @Override
