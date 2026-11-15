@@ -40,6 +40,12 @@ public final class ProviderHttp {
         return execute(OkHttpManager.instance().doPostRequest(url, headers, json, "application/json"), url);
     }
 
+    public static String postForm(String url, String form, Map<String, String> extraHeaders) throws IOException {
+        Map<String, String> headers = headers(extraHeaders);
+        headers.put("Content-Type", "application/x-www-form-urlencoded");
+        return execute(OkHttpManager.instance().doPostRequest(url, headers, form, "application/x-www-form-urlencoded"), url);
+    }
+
     /**
      * HTTP status of a one-byte request, or 0 when the server could not be reached.
      */

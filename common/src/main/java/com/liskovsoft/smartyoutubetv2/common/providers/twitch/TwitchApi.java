@@ -72,7 +72,13 @@ public final class TwitchApi {
             + "videoPlaybackAccessToken(id: $vodID, params: {platform: \"web\", playerBackend: \"mediaplayer\", "
             + "playerType: $playerType}) @include(if: $isVod) { value signature __typename } }";
 
+    /** Client id + user agent of the Twitch Android app: the account is linked with a code (twitch.tv/activate) using them. */
+    public static final String ANDROID_CLIENT_ID = "kd1unb4b3q4t58fwlpcbzcbnm76a8fp";
+    public static final String ANDROID_USER_AGENT =
+            "Dalvik/2.1.0 (Linux; U; Android 7.1.2; SM-G977N Build/LMY48Z) tv.twitch.android.app/16.8.1/1608010";
     private static volatile String sAuthToken;
+    /** The client id the signed-in token belongs to. Null: the web client id (tokens from the web page). */
+    private static volatile String sAuthClientId;
     private static volatile List<Game> sSeenGames = new ArrayList<>();
 
     private TwitchApi() {
@@ -95,6 +101,10 @@ public final class TwitchApi {
         sAuthToken = token != null && !token.isEmpty() ? token : null;
     }
 
+    public static void setAuthClientId(String clientId) {
+        sAuthClientId = clientId != null && !clientId.isEmpty() ? clientId : null;
+    }
+
     public static boolean isSignedIn() {
         return sAuthToken != null;
     }
@@ -106,6 +116,15 @@ public final class TwitchApi {
 
         if (token != null) {
             headers.put("Authorization", "OAuth " + token);
+
+            String authClientId = sAuthClientId;
+
+            if (authClientId != null) { // a token only works with the client id it was issued for
+                headers.put("Client-ID", authClientId);
+                headers.put("User-Agent", ANDROID_USER_AGENT);
+                headers.remove("Origin");
+                headers.remove("Referer");
+            }
         }
 
         return headers;

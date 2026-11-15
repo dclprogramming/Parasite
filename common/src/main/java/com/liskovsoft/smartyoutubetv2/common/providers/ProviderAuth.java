@@ -37,6 +37,14 @@ public final class ProviderAuth {
         prefs(context).edit().putString("twitch_token", token).commit();
     }
 
+    public static String getTwitchClientId(Context context) {
+        return context != null ? prefs(context).getString("twitch_client_id", null) : null;
+    }
+
+    public static void setTwitchClientId(Context context, String clientId) {
+        prefs(context).edit().putString("twitch_client_id", clientId).commit();
+    }
+
     public static String siteOf(int provider) {
         return provider == ProviderData.RUMBLE ? RUMBLE_SITE : TWITCH_SITE;
     }
@@ -70,6 +78,7 @@ public final class ProviderAuth {
 
         if (provider == ProviderData.TWITCH) {
             setTwitchToken(context, null);
+            setTwitchClientId(context, null);
         }
 
         if (provider == ProviderData.RUMBLE) {

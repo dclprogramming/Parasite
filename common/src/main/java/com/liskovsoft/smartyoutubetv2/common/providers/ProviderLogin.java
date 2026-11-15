@@ -15,6 +15,7 @@ import com.liskovsoft.smartyoutubetv2.common.prefs.ProviderData;
 import com.liskovsoft.smartyoutubetv2.common.providers.rumble.RumbleApi;
 import com.liskovsoft.smartyoutubetv2.common.providers.twitch.TwitchAccount;
 import com.liskovsoft.smartyoutubetv2.common.providers.twitch.TwitchApi;
+import com.liskovsoft.smartyoutubetv2.common.providers.twitch.TwitchDeviceLogin;
 
 /**
  * Sign in / sign out for the active non-YouTube provider.
@@ -89,6 +90,104 @@ public final class ProviderLogin {
             return;
         }
 
+        if (provider == ProviderData.TWITCH) {
+            startTwitchCode(context, onChanged);
+            return;
+        }
+
+        startBrowserLogin(context, provider, onChanged);
+    }
+
+    /** Twitch: a code to enter at twitch.tv/activate (no browser on this device). The other ways are the fallback. */
+    private static void startTwitchCode(Context context, Runnable onChanged) {
+        TwitchDeviceLogin.start(context, new TwitchDeviceLogin.Callback() {
+            @Override
+            public void onToken(String token) {
+                finishWithDeviceToken(context, token, notifying(onChanged));
+            }
+
+            @Override
+            public void onFailed(String message) {
+                MessageHelpers.showLongMessage(context, "Twitch code sign-in failed: " + message);
+                showTwitchChoice(context, onChanged);
+            }
+        });
+    }
+
+    private static void finishWithDeviceToken(Context context, String token, Runnable onChanged) {
+        new Thread(() -> {
+            String message;
+
+            try {
+                // The token only works with the client id of the app that issued it
+                ProviderAuth.setTwitchClientId(context, TwitchApi.ANDROID_CLIENT_ID);
+                TwitchApi.setAuthClientId(TwitchApi.ANDROID_CLIENT_ID);
+                sTwitchTokenSource = "activation code";
+                message = finishTwitch(context, token);
+
+                if (!ProviderAuth.isSignedIn(context, ProviderData.TWITCH)) {
+                    ProviderAuth.setTwitchClientId(context, null);
+                    TwitchApi.setAuthClientId(null);
+                }
+            } catch (Exception e) {
+                message = "Twitch: could not check the sign-in (" + e.getMessage() + ")";
+            }
+
+            String text = message;
+            new Handler(Looper.getMainLooper()).post(() -> {
+                MessageHelpers.showLongMessage(context, text);
+
+                if (onChanged != null) {
+                    onChanged.run();
+                }
+            });
+        }).start();
+    }
+
+    /** Twitch often refuses to sign in inside a WebView ("browser not supported"), so offer a token sign-in too. */
+    private static void showTwitchChoice(Context context, Runnable onChanged) {
+        AppDialogPresenter dialog = AppDialogPresenter.instance(context);
+        dialog.appendSingleButton(UiOptionItem.from("Try the sign-in code again", option -> {
+            dialog.closeDialog();
+            startTwitchCode(context, onChanged);
+        }));
+        dialog.appendSingleButton(UiOptionItem.from("Sign in with a token (use this if the page says browser not supported)", option -> {
+            dialog.closeDialog();
+            ProviderTokenDialog.show(context, token -> finishWithToken(context, token, notifying(onChanged)));
+        }));
+        dialog.appendSingleButton(UiOptionItem.from("Sign in with the Twitch page", option -> {
+            dialog.closeDialog();
+            startBrowserLogin(context, ProviderData.TWITCH, onChanged);
+        }));
+        dialog.appendSingleButton(UiOptionItem.from("Cancel", option -> dialog.closeDialog()));
+        dialog.showDialog("Twitch sign-in");
+    }
+
+    private static void finishWithToken(Context context, String pastedToken, Runnable onChanged) {
+        new Thread(() -> {
+            String message;
+
+            try {
+                sTwitchTokenSource = "pasted";
+                ProviderAuth.setTwitchClientId(context, null);
+                TwitchApi.setAuthClientId(null);
+                message = finishTwitch(context, cleanToken(pastedToken));
+            } catch (Exception e) {
+                message = "Twitch: could not check the token (" + e.getMessage() + ")";
+            }
+
+            String text = message;
+            new Handler(Looper.getMainLooper()).post(() -> {
+                MessageHelpers.showLongMessage(context, text);
+
+                if (onChanged != null) {
+                    onChanged.run();
+                }
+            });
+        }).start();
+    }
+
+    private static void startBrowserLogin(Context context, int provider, Runnable onChanged) {
         String hint = "Sign in to " + nameOf(provider) + ", then press Back to finish";
 
         try {
@@ -133,7 +232,12 @@ public final class ProviderLogin {
     }
 
     private static String finishTwitch(Context context) throws Exception {
-        String token = twitchToken();
+        ProviderAuth.setTwitchClientId(context, null);
+        TwitchApi.setAuthClientId(null); // tokens from the web page belong to the web client id
+        return finishTwitch(context, twitchToken());
+    }
+
+    private static String finishTwitch(Context context, String token) throws Exception {
 
         if (token == null) {
             ProviderAuth.setSignedIn(context, ProviderData.TWITCH, false);
