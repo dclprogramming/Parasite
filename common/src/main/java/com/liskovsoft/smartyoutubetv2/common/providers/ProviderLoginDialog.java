@@ -91,8 +91,8 @@ public final class ProviderLoginDialog {
         return m.find() ? m.group(1) : "120.0.0.0";
     }
 
-    private static String desktopChromeUa(String chromeVersion) {
-        return "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/" + chromeVersion + " Safari/537.36";
+    private static String chromeLikeUa(String webViewUa) {
+        return webViewUa.replace("; wv", "").replace(" Version/4.0", "").replace("Version/4.0 ", "");
     }
 
     public static void show(Context context, int provider, String hint, OnClosed onClosed) {
@@ -105,9 +105,10 @@ public final class ProviderLoginDialog {
         settings.setDomStorageEnabled(true);
         String webViewUa = settings.getUserAgentString();
         String chromeVersion = chromeVersionOf(webViewUa);
-        // Twitch rejects WebView/mobile user agents ("browser not supported"): present a plain desktop Chrome
-        // with the WebView's real Chrome version. Rumble keeps the previous behavior.
-        settings.setUserAgentString(provider == ProviderData.TWITCH ? desktopChromeUa(chromeVersion) : webViewUa.replace("; wv", "")); // plain Chrome, like the page expects
+        // Twitch rejects WebView user agents ("browser not supported"), but a made-up desktop UA that contradicts the
+        // WebView's real Android signals stalls its bot check (endless spinner). So keep the real Android Chrome UA and
+        // only drop the WebView markers ("; wv" and "Version/4.0"). Rumble keeps the previous behavior.
+        settings.setUserAgentString(provider == ProviderData.TWITCH ? chromeLikeUa(webViewUa) : webViewUa.replace("; wv", "")); // plain Chrome, like the page expects
         if (provider == ProviderData.TWITCH) {
             hint = hint + " (WebView Chrome " + chromeVersion.split("\\.")[0] + ")";
         }
