@@ -27,6 +27,7 @@
  ],
  "hosts": [
   "aomedia.org",
+  "android.tv.twitch.tv",
   "api.qrserver.com",
   "api.sponsor.ajay.app",
   "cami-youtubei.sandbox.googleapis.com",

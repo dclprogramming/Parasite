@@ -45,6 +45,19 @@ public final class ProviderAuth {
         prefs(context).edit().putString("twitch_client_id", clientId).commit();
     }
 
+    /** Random id of this installation for the Twitch TV sign-in. Made once, kept. */
+    public static String getTwitchDeviceId(Context context) {
+        SharedPreferences prefs = prefs(context);
+        String id = prefs.getString("twitch_device_id", null);
+
+        if (id == null || id.isEmpty()) {
+            id = java.util.UUID.randomUUID().toString().replace("-", "");
+            prefs.edit().putString("twitch_device_id", id).commit();
+        }
+
+        return id;
+    }
+
     public static String siteOf(int provider) {
         return provider == ProviderData.RUMBLE ? RUMBLE_SITE : TWITCH_SITE;
     }

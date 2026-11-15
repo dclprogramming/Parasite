@@ -120,8 +120,9 @@ public final class ProviderLogin {
 
             try {
                 // The token only works with the client id of the app that issued it
-                ProviderAuth.setTwitchClientId(context, TwitchApi.ANDROID_CLIENT_ID);
-                TwitchApi.setAuthClientId(TwitchApi.ANDROID_CLIENT_ID);
+                ProviderAuth.setTwitchClientId(context, TwitchApi.AUTH_CLIENT_ID);
+                TwitchApi.setAuthDeviceId(ProviderAuth.getTwitchDeviceId(context));
+                TwitchApi.setAuthClientId(TwitchApi.AUTH_CLIENT_ID);
                 sTwitchTokenSource = "activation code";
                 message = finishTwitch(context, token);
 

@@ -37,6 +37,7 @@ public final class ProviderServices {
 
         if (provider == ProviderData.TWITCH && context != null) {
             ProviderStore store = new ProviderStore(context, "twitch");
+            com.liskovsoft.smartyoutubetv2.common.providers.twitch.TwitchApi.setAuthDeviceId(ProviderAuth.getTwitchDeviceId(context));
             com.liskovsoft.smartyoutubetv2.common.providers.twitch.TwitchApi.setAuthClientId(ProviderAuth.getTwitchClientId(context));
             com.liskovsoft.smartyoutubetv2.common.providers.twitch.TwitchApi.setAuthToken(ProviderAuth.getTwitchToken(context));
             com.liskovsoft.smartyoutubetv2.common.providers.twitch.TwitchApi.setAuthRejectedListener(() -> {

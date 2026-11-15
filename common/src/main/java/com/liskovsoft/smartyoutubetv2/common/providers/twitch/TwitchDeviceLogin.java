@@ -6,6 +6,7 @@ import android.os.Handler;
 import android.os.Looper;
 
 import com.liskovsoft.smartyoutubetv2.common.providers.HttpStatusException;
+import com.liskovsoft.smartyoutubetv2.common.providers.ProviderAuth;
 import com.liskovsoft.smartyoutubetv2.common.providers.ProviderHttp;
 
 import org.json.JSONObject;
@@ -31,21 +32,26 @@ public final class TwitchDeviceLogin {
     private TwitchDeviceLogin() {
     }
 
-    private static Map<String, String> headers() {
+    private static Map<String, String> headers(String deviceId) {
         Map<String, String> headers = new HashMap<>();
-        headers.put("User-Agent", TwitchApi.ANDROID_USER_AGENT);
+        headers.put("User-Agent", TwitchApi.AUTH_USER_AGENT);
         headers.put("Accept", "application/json");
+        headers.put("Client-Id", TwitchApi.AUTH_CLIENT_ID);
+        headers.put("Origin", TwitchApi.AUTH_ORIGIN);
+        headers.put("Referer", TwitchApi.AUTH_ORIGIN + "/");
+        headers.put("X-Device-Id", deviceId);
         return headers;
     }
 
     public static void start(Context context, Callback callback) {
+        String deviceId = ProviderAuth.getTwitchDeviceId(context);
         Handler main = new Handler(Looper.getMainLooper());
         AtomicBoolean cancelled = new AtomicBoolean(false);
         AlertDialog[] dialog = new AlertDialog[1];
 
         new Thread(() -> {
             try {
-                String answer = ProviderHttp.postForm(DEVICE_URL, "client_id=" + TwitchApi.ANDROID_CLIENT_ID + "&scopes=", headers());
+                String answer = ProviderHttp.postForm(DEVICE_URL, "client_id=" + TwitchApi.AUTH_CLIENT_ID + "&scopes=", headers(deviceId));
                 JSONObject json = new JSONObject(answer);
                 String deviceCode = json.getString("device_code");
                 String userCode = json.getString("user_code");
@@ -62,7 +68,7 @@ public final class TwitchDeviceLogin {
                             .show();
                 });
 
-                String form = "client_id=" + TwitchApi.ANDROID_CLIENT_ID + "&device_code=" + deviceCode
+                String form = "client_id=" + TwitchApi.AUTH_CLIENT_ID + "&device_code=" + deviceCode
                         + "&grant_type=urn:ietf:params:oauth:grant-type:device_code";
 
                 while (!cancelled.get() && System.currentTimeMillis() < deadline) {
@@ -73,7 +79,7 @@ public final class TwitchDeviceLogin {
                     }
 
                     try {
-                        String token = new JSONObject(ProviderHttp.postForm(TOKEN_URL, form, headers())).optString("access_token", null);
+                        String token = new JSONObject(ProviderHttp.postForm(TOKEN_URL, form, headers(deviceId))).optString("access_token", null);
 
                         if (token != null && !token.isEmpty()) {
                             main.post(() -> {

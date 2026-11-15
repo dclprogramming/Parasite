@@ -72,10 +72,16 @@ public final class TwitchApi {
             + "videoPlaybackAccessToken(id: $vodID, params: {platform: \"web\", playerBackend: \"mediaplayer\", "
             + "playerType: $playerType}) @include(if: $isVod) { value signature __typename } }";
 
-    /** Client id + user agent of the Twitch Android app: the account is linked with a code (twitch.tv/activate) using them. */
-    public static final String ANDROID_CLIENT_ID = "kd1unb4b3q4t58fwlpcbzcbnm76a8fp";
-    public static final String ANDROID_USER_AGENT =
-            "Dalvik/2.1.0 (Linux; U; Android 7.1.2; SM-G977N Build/LMY48Z) tv.twitch.android.app/16.8.1/1608010";
+    /**
+     * Identity of the Twitch TV app. Twitch only hands out sign-in codes (twitch.tv/activate) to this client now (the Android
+     * app's client id is refused with "invalid client"), and a token only works with the client id, user agent and origin
+     * it was issued for.
+     */
+    public static final String AUTH_CLIENT_ID = "ue6666qo983tsx6so1t0vnawi233wa";
+    public static final String AUTH_USER_AGENT =
+            "Mozilla/5.0 (Linux; Android 7.1; Smart Box C1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36";
+    public static final String AUTH_ORIGIN = "https://android.tv.twitch.tv";
+    private static volatile String sAuthDeviceId;
     private static volatile String sAuthToken;
     /** The client id the signed-in token belongs to. Null: the web client id (tokens from the web page). */
     private static volatile String sAuthClientId;
@@ -105,6 +111,11 @@ public final class TwitchApi {
         sAuthClientId = clientId != null && !clientId.isEmpty() ? clientId : null;
     }
 
+    /** Random id of this installation, sent with the TV-client requests. */
+    public static void setAuthDeviceId(String deviceId) {
+        sAuthDeviceId = deviceId != null && !deviceId.isEmpty() ? deviceId : null;
+    }
+
     public static boolean isSignedIn() {
         return sAuthToken != null;
     }
@@ -121,9 +132,13 @@ public final class TwitchApi {
 
             if (authClientId != null) { // a token only works with the client id it was issued for
                 headers.put("Client-ID", authClientId);
-                headers.put("User-Agent", ANDROID_USER_AGENT);
-                headers.remove("Origin");
-                headers.remove("Referer");
+                headers.put("User-Agent", AUTH_USER_AGENT);
+                headers.put("Origin", AUTH_ORIGIN);
+                headers.put("Referer", AUTH_ORIGIN + "/");
+
+                if (sAuthDeviceId != null) {
+                    headers.put("X-Device-Id", sAuthDeviceId);
+                }
             }
         }
 
